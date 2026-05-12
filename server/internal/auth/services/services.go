@@ -1,19 +1,26 @@
 package services
 
 import (
-	"example-service/internal/config"
-	example_service "example-service/internal/services/usecase/example"
-	"example-service/internal/storage/repositories"
-	//"github.com/redis/go-redis/v9"
-	//"gopkg.in/gomail.v2"
+	auth_service "eventor/internal/auth/services/usecase/auth"
+	token_service "eventor/internal/auth/services/usecase/token"
+	"eventor/internal/auth/storage/repositories"
+	"eventor/internal/platform/config"
 )
 
+//"github.com/redis/go-redis/v9"
+//"gopkg.in/gomail.v2"
+
 type Services struct {
-	ExampleService *example_service.ExampleService
+	AuthService  *auth_service.AuthService
+	TokenService *token_service.TokenService
 }
 
 func Init(repos *repositories.Repos, cfg *config.Config) *Services {
+	tokenService := token_service.Init(repos.TokenRepo, &cfg.JWT)
+	authService := auth_service.Init(tokenService)
+
 	return &Services{
-		ExampleService: example_service.Init(repos.ExampleRepo),
+		AuthService:  authService,
+		TokenService: tokenService,
 	}
 }

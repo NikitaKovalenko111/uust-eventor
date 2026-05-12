@@ -1,4 +1,4 @@
-package logger
+package sl
 
 import (
 	"eventor/internal/platform/types"

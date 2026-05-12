@@ -1,21 +1,26 @@
 package controllers
 
 import (
-	"example-service/internal/services"
-	example_controller "example-service/internal/transport/http/controllers/example"
+	"eventor/internal/auth/services"
+	auth_controller "eventor/internal/auth/transport/http/controllers/auth"
 	"log/slog"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 type Controllers struct {
-	logger            *slog.Logger
-	ExampleController *example_controller.ExampleController
-	// Controllers
+	AuthController *auth_controller.AuthController
 }
 
 func Init(services *services.Services, logger *slog.Logger) *Controllers {
 	return &Controllers{
-		logger:            logger,
-		ExampleController: example_controller.Init(services.ExampleService),
-		// Inits of controllers
+		AuthController: auth_controller.NewAuthController(services.AuthService, logger),
 	}
+}
+
+func (c *Controllers) RegisterRoutes(app *fiber.App, authMiddleware func(c *fiber.Ctx) error) {
+	basicRouter := app.Group("/auth")
+	protectedRouter := app.Group("/auth").Use(authMiddleware)
+
+	c.AuthController.RegisterRoutes(basicRouter, protectedRouter)
 }

@@ -13,9 +13,15 @@ type Config struct {
 	Env        string `yaml:"env" env-default:"local"`
 	Storage    `yaml:"storage"`
 	HTTPServer `yaml:"http_server"`
+	JWT        `yaml:"jwt"`
 	//SMTP       `yaml:"smtp"`
-	//JWT        `yaml:"jwt"`
 	//Redis      `yaml:"redis"`
+}
+
+type JWT struct {
+	Secret          string        `yaml:"secret" env-required:"true"`
+	AccessTokenTTL  time.Duration `yaml:"access_token_ttl" env-default:"15m"`
+	RefreshTokenTTL time.Duration `yaml:"refresh_token_ttl" env-default:"7d"`
 }
 
 type Storage struct {

@@ -1,17 +1,17 @@
-package app
+package auth_module
 
 import (
 	//"context"
 	//"crypto/tls"
-	"example-service/internal/config"
-	"example-service/internal/logger/sl"
-	"example-service/internal/middleware"
-	"example-service/internal/services"
-	"example-service/internal/storage"
 
-	//redisStorage "example-service/internal/storage/redis"
-	"example-service/internal/storage/repositories"
-	"example-service/internal/transport/http"
+	auth_middleware "eventor/internal/auth/middleware"
+	"eventor/internal/auth/services"
+	"eventor/internal/auth/storage/repositories"
+	"eventor/internal/auth/transport/http"
+	"eventor/internal/platform/config"
+	sl "eventor/internal/platform/logger"
+	"eventor/internal/platform/middleware"
+	"eventor/internal/platform/storage"
 
 	"github.com/gofiber/contrib/swagger"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -31,23 +31,18 @@ type App struct {
 // @in header
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
-func New(cfg *config.Config) *App {
+func New(cfg *config.Config, app *fiber.App) *App {
 	logger := sl.InitLogger(cfg.Env)
 
 	logger.Info("Logger is enabled")
 	logger.Debug("Debug is enabled")
 
-	db := storage.Connect(cfg)
-
-	logger.Info("Successfully connected to database!")
-
-	storage := storage.Init(db)
-
+	storage := storage.Init(&cfg.Storage)
 	logger.Info("Successfully inited storage!")
 
-	storage.Prepare()
+	storage.Connect()
 
-	logger.Info("Successfully prepared db!")
+	logger.Info("Successfully connected to database!")
 
 	//redisClient, err := redisStorage.NewClient(context.Background(), cfg)
 
@@ -55,26 +50,18 @@ func New(cfg *config.Config) *App {
 		panic("Couldn't connect to redis!")
 	}*/
 
-	logger.Info("Successfully connected to redis!")
-
-	repos := repositories.Init(db)
+	repos := repositories.Init(storage.Db)
 
 	logger.Info("Successfully inited repositories!")
 
 	/*d := gomail.NewDialer(cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.Username, cfg.SMTP.Password)
 	d.TLSConfig = &tls.Config{InsecureSkipVerify: true}*/
 
-	services := services.Init(repos /*d,*/, cfg /*redisClient*/)
+	services := services.Init(repos, cfg)
 
 	//authMiddleware := middleware.NewAuth(cfg, services.TokenService)
 
 	logger.Info("Successfully inited services!")
-
-	app := fiber.New(fiber.Config{
-		StrictRouting: true,
-		WriteTimeout:  cfg.HTTPServer.Timeout,
-		IdleTimeout:   cfg.HTTPServer.IdleTimeout,
-	})
 
 	swaggerCfg := swagger.Config{
 		BasePath: "/api",
@@ -90,7 +77,9 @@ func New(cfg *config.Config) *App {
 	app.Use(swagger.New(swaggerCfg))
 	app.Use(middleware.NewLogger(logger))
 
-	http := http.Init(services, app /*authMiddleware*/)
+	authMiddleware := auth_middleware.NewJWTMiddleware(services.TokenService, logger)
+
+	http := http.Init(services, logger, app, authMiddleware)
 
 	return &App{
 		http:   http,
@@ -101,8 +90,6 @@ func New(cfg *config.Config) *App {
 
 func (app *App) Run() {
 	app.http.Start()
-
-	go app.app.Listen(app.config.HTTPServer.Address)
 }
 
 func (app *App) Stop() {

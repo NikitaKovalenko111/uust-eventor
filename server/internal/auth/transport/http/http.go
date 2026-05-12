@@ -1,20 +1,20 @@
 package http
 
 import (
-	"example-service/internal/services"
-	"example-service/internal/transport/http/controllers"
+	"eventor/internal/auth/services"
+	"eventor/internal/auth/transport/http/controllers"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 type HTTP struct {
-	app         *fiber.App
-	controllers *controllers.Controllers
-	//authMiddleware          func(c *fiber.Ctx) error
+	app            *fiber.App
+	controllers    *controllers.Controllers
+	authMiddleware func(c *fiber.Ctx) error
 }
 
-func Init(services *services.Services, logger *slog.Logger, app *fiber.App /*authMiddleware func(c *fiber.Ctx) error*/) *HTTP {
+func Init(services *services.Services, logger *slog.Logger, app *fiber.App, authMiddleware func(c *fiber.Ctx) error) *HTTP {
 	return &HTTP{
 		app:         app,
 		controllers: controllers.Init(services, logger),
@@ -22,5 +22,5 @@ func Init(services *services.Services, logger *slog.Logger, app *fiber.App /*aut
 }
 
 func (http *HTTP) Start() {
-	http.controllers.ExampleController.RegisterRoutes("example", http.app)
+	http.controllers.RegisterRoutes(http.app, http.authMiddleware)
 }
