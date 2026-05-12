@@ -18,17 +18,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// UserRepository интерфейс репозитория (для инъекции зависимостей)
-type UserRepository interface {
-	Create(ctx context.Context, u *models.User) error
-	GetByID(ctx context.Context, id uint64) (*models.User, error)
-	GetByEmail(ctx context.Context, email string) (*models.User, error)
-	UpdatePartial(ctx context.Context, id uint64, updates map[string]interface{}) error
-	Delete(ctx context.Context, id uint64) error
-	List(ctx context.Context, limit, offset int) ([]*models.User, error)
-	Count(ctx context.Context) (int64, error)
-}
-
 // UserService бизнес-логика работы с пользователями
 type UserService struct {
 	repo *user_storage.UserRepo
@@ -194,6 +183,7 @@ func (s *UserService) Delete(ctx context.Context, id uint64) error {
 	return nil
 }
 
+// TODO: Delete AUTH
 // =====================================================
 // AUTH
 // =====================================================
