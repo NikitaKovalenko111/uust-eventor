@@ -22,5 +22,5 @@ func Init(services *services.Services, logger *slog.Logger, app *fiber.App /*aut
 }
 
 func (http *HTTP) Start() {
-	http.controllers.UserController.RegisterRoutes("user", http.app)
+	http.controllers.UserController.RegisterRoutes(http.app, "/api/v1/users" /*TODO auth midleware*/)
 }

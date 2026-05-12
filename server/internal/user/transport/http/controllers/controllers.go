@@ -15,7 +15,7 @@ type Controllers struct {
 func Init(services *services.Services, logger *slog.Logger) *Controllers {
 	return &Controllers{
 		logger:         logger,
-		UserController: user_controller.Init(services.UserService),
+		UserController: user_controller.Init(logger, services.UserService),
 		// Inits of controllers
 	}
 }
