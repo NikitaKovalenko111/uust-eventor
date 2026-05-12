@@ -43,7 +43,6 @@ func (r *UserRepo) Create(ctx context.Context, u *models.User) error {
 	).Scan(&u.ID, &u.CreatedAt, &u.UpdatedAt)
 
 	if err != nil {
-		// Обработка уникальности email через pq.Error
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" { // unique_violation
 			return fmt.Errorf("user with email %s already exists: %w", u.Email, err)
@@ -53,7 +52,7 @@ func (r *UserRepo) Create(ctx context.Context, u *models.User) error {
 	return nil
 }
 
-func (r *UserRepo) GetByID(ctx context.Context, id int64) (*models.User, error) {
+func (r *UserRepo) GetByID(ctx context.Context, id uint64) (*models.User, error) {
 	query := `
 		SELECT id, name, email, role, about, city, faculty, course, 
 		       avatar_image_id, created_at, updated_at 
@@ -133,7 +132,7 @@ func (r *UserRepo) Update(ctx context.Context, user *models.User) error {
 	return nil
 }
 
-func (r *UserRepo) UpdatePartial(ctx context.Context, id int64, updates map[string]interface{}) error {
+func (r *UserRepo) UpdatePartial(ctx context.Context, id uint64, updates map[string]interface{}) error {
 	if len(updates) == 0 {
 		return nil
 	}
@@ -186,7 +185,7 @@ func (r *UserRepo) UpdatePartial(ctx context.Context, id int64, updates map[stri
 	return nil
 }
 
-func (r *UserRepo) Delete(ctx context.Context, id int64) error {
+func (r *UserRepo) Delete(ctx context.Context, id uint64) error {
 	query := `DELETE FROM users WHERE id = $1`
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
