@@ -7,12 +7,12 @@ import (
 )
 
 type TokenRepo struct {
-	db *sql.DB
+	Db *sql.DB
 }
 
 func Init(db *sql.DB) *TokenRepo {
 	return &TokenRepo{
-		db: db,
+		Db: db,
 	}
 }
 
@@ -23,7 +23,7 @@ func (r *TokenRepo) Create(token *models.Token) (*models.Token, error) {
 		RETURNING id
 	`
 
-	err := r.db.QueryRow(query, token.UserId, token.Hash, token.ExpiresAt, token.CreatedAt).Scan(&token.Id)
+	err := r.Db.QueryRow(query, token.UserId, token.Hash, token.ExpiresAt, token.CreatedAt).Scan(&token.Id)
 
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (r *TokenRepo) FindByUserID(userID types.IdType) ([]models.Token, error) {
 		WHERE user_id = $1
 	`
 
-	rows, err := r.db.Query(query, userID)
+	rows, err := r.Db.Query(query, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (r *TokenRepo) FindByUserID(userID types.IdType) ([]models.Token, error) {
 func (r *TokenRepo) Delete(tokenID types.IdType) error {
 	query := `DELETE FROM auth_tokens WHERE id = $1`
 
-	_, err := r.db.Exec(query, tokenID)
+	_, err := r.Db.Exec(query, tokenID)
 
 	return err
 }

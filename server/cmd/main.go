@@ -7,10 +7,13 @@ import (
 	"syscall"
 
 	auth_module "eventor/internal/auth/app"
+	token_service "eventor/internal/auth/services/usecase/token"
+	token_repo "eventor/internal/auth/storage/repositories/token"
 	"eventor/internal/platform/config"
 	sl "eventor/internal/platform/logger"
 	"eventor/internal/platform/middleware"
 	"eventor/internal/platform/storage"
+	user_module "eventor/internal/user"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -33,7 +36,12 @@ func main() {
 
 	app.Use(loggerMiddleware)
 
-	authModule := auth_module.New(cfg, app)
+	tokenService := token_service.Init(token_repo.Init(storage.Db), &cfg.JWT)
+	authMiddleware := middleware.NewJWTMiddleware(tokenService, logger)
+
+	userModule, userServices := user_module.New(cfg, app, logger, storage, tok)
+
+	authModule, authServices := auth_module.New(cfg, app, logger, storage)
 	authModule.Run()
 
 	app.Get("/health", func(c *fiber.Ctx) error {

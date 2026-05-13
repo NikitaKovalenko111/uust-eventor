@@ -19,8 +19,8 @@ func Init(services *services.Services, logger *slog.Logger) *Controllers {
 }
 
 func (c *Controllers) RegisterRoutes(app *fiber.App, authMiddleware func(c *fiber.Ctx) error) {
-	basicRouter := app.Group("/auth")
-	protectedRouter := app.Group("/auth").Use(authMiddleware)
+	basicRouter := app.Group("/api/v1/auth")
+	protectedRouter := app.Group("/api/v1/auth").Use(authMiddleware)
 
 	c.AuthController.RegisterRoutes(basicRouter, protectedRouter)
 }

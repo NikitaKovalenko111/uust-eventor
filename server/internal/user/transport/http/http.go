@@ -1,8 +1,8 @@
 package http
 
 import (
-	"eventor/internal/auth/services"
-	"eventor/internal/auth/transport/http/controllers"
+	"eventor/internal/user/services"
+	"eventor/internal/user/transport/http/controllers"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
@@ -22,5 +22,5 @@ func Init(services *services.Services, logger *slog.Logger, app *fiber.App, auth
 }
 
 func (http *HTTP) Start() {
-	http.controllers.RegisterRoutes(http.app, http.authMiddleware)
+	http.controllers.UserController.RegisterRoutes(http.app, "/api/v1/users", http.authMiddleware)
 }

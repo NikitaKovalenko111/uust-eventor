@@ -1,32 +1,31 @@
-package user_service
+package auth_service
 
 import (
-	"errors"
+	"context"
+	"eventor/internal/auth/contracts/user_provider"
 	domain_errors "eventor/internal/auth/domain/errors"
 	"eventor/internal/auth/domain/models"
 	token_service "eventor/internal/auth/services/usecase/token"
-	user_repo "eventor/internal/auth/storage/repositories/user"
-	"eventor/internal/platform/types"
+	user_dto "eventor/internal/user/transport/http/dto/user"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
-type UserService struct {
-	UserRepo     *user_repo.UserRepo
+type AuthService struct {
 	TokenService *token_service.TokenService
+	UserProvider user_provider.UserProvider
 }
 
-func Init(userRepo *user_repo.UserRepo, tokenService *token_service.TokenService) *UserService {
-	return &UserService{
-		UserRepo:     userRepo,
+func Init(tokenService *token_service.TokenService, userProvider user_provider.UserProvider) *AuthService {
+	return &AuthService{
 		TokenService: tokenService,
+		UserProvider: userProvider,
 	}
 }
 
-// Register creates a new user and returns a token pair
-func (us *UserService) Register(email string, password string, role string) (*models.TokenPair, error) {
-	// Check if user already exists
-	existingUser, err := us.UserRepo.FindByEmail(email)
+func (s *AuthService) Register(city string, name string, email string, password string, role string) (*models.TokenPair, error) {
+	existingUser, err := s.UserProvider.GetByEmail(context.Background(), email)
+
 	if err != nil {
 		return nil, err
 	}
@@ -35,31 +34,37 @@ func (us *UserService) Register(email string, password string, role string) (*mo
 		return nil, domain_errors.ErrEmailAlreadyExists
 	}
 
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, errors.Join(domain_errors.ErrTokenGenerationFailed, err)
-	}
+	tx, err := s.TokenService.TokenRepo.Db.Begin()
 
-	// Create user
-	user, err := us.UserRepo.Create(email, string(hashedPassword), role)
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate token pair
-	tokenPair, err := us.TokenService.CreateTokenPair(user.ID, user.Email, user.Role)
+	defer tx.Rollback()
+
+	user, err := s.UserProvider.Create(context.Background(), &user_dto.CreateUserRequest{
+		Name:     name,
+		Email:    email,
+		Password: password,
+	}, tx)
+
 	if err != nil {
 		return nil, err
 	}
+
+	tokenPair, err := s.TokenService.CreateTokenPair(user.ID, user.Email, user.Role)
+	if err != nil {
+		return nil, err
+	}
+
+	tx.Commit()
 
 	return tokenPair, nil
 }
 
-// Login authenticates a user and returns a token pair
-func (us *UserService) Login(email string, password string) (*models.TokenPair, error) {
-	// Find user by email
-	user, err := us.UserRepo.FindByEmail(email)
+func (s *AuthService) Login(email string, password string) (*models.TokenPair, error) {
+	user, err := s.UserProvider.GetByEmail(context.Background(), email)
+
 	if err != nil {
 		return nil, err
 	}
@@ -68,22 +73,15 @@ func (us *UserService) Login(email string, password string) (*models.TokenPair, 
 		return nil, domain_errors.ErrInvalidCredentials
 	}
 
-	// Verify password
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
 		return nil, domain_errors.ErrInvalidCredentials
 	}
 
-	// Generate token pair
-	tokenPair, err := us.TokenService.CreateTokenPair(user.ID, user.Email, user.Role)
+	tokenPair, err := s.TokenService.CreateTokenPair(user.ID, user.Email, user.Role)
 	if err != nil {
 		return nil, err
 	}
 
 	return tokenPair, nil
-}
-
-// GetUser retrieves user by ID
-func (us *UserService) GetUser(userID types.IdType) (*models.User, error) {
-	return us.UserRepo.FindByID(userID)
 }

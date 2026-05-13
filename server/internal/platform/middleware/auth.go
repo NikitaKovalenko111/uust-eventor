@@ -1,7 +1,7 @@
-package auth_middleware
+package middleware
 
 import (
-	token_service "eventor/internal/auth/services/usecase/token"
+	"eventor/internal/platform/contracts/token_provider"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func NewJWTMiddleware(tokenService *token_service.TokenService, logger *slog.Logger) fiber.Handler {
+func NewJWTMiddleware(tokenService token_provider.TokenProvider, logger *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
 		if authHeader == "" {

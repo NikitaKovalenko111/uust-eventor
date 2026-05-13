@@ -62,7 +62,7 @@ func (ac *AuthController) register(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid request"})
 	}
 
-	tokenPair, err := ac.authService.Register(req.Email, req.Password, req.Role)
+	tokenPair, err := ac.authService.Register(req.City, req.Name, req.Email, req.Password, req.Role)
 	if err != nil {
 		if errors.Is(err, domain_errors.ErrEmailAlreadyExists) {
 			ac.logger.Info("registration failed: email already exists", slog.String("email", req.Email))
