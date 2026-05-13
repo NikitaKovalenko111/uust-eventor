@@ -2,10 +2,12 @@ package auth_service
 
 import (
 	"context"
+	"errors"
 	"eventor/internal/auth/contracts/user_provider"
 	domain_errors "eventor/internal/auth/domain/errors"
 	"eventor/internal/auth/domain/models"
 	token_service "eventor/internal/auth/services/usecase/token"
+	user_errors "eventor/internal/user/domain/errors"
 	user_dto "eventor/internal/user/transport/http/dto/user"
 
 	"golang.org/x/crypto/bcrypt"
@@ -27,7 +29,9 @@ func (s *AuthService) Register(city string, name string, email string, password 
 	existingUser, err := s.UserProvider.GetByEmail(context.Background(), email)
 
 	if err != nil {
-		return nil, err
+		if !errors.Is(err, user_errors.ErrUserNotFound) {
+			return nil, err
+		}
 	}
 
 	if existingUser != nil {
@@ -43,6 +47,8 @@ func (s *AuthService) Register(city string, name string, email string, password 
 	defer tx.Rollback()
 
 	user, err := s.UserProvider.Create(context.Background(), &user_dto.CreateUserRequest{
+		City:     city,
+		Role:     role,
 		Name:     name,
 		Email:    email,
 		Password: password,
@@ -52,7 +58,7 @@ func (s *AuthService) Register(city string, name string, email string, password 
 		return nil, err
 	}
 
-	tokenPair, err := s.TokenService.CreateTokenPair(user.ID, user.Email, user.Role)
+	tokenPair, err := s.TokenService.CreateTokenPair(user.ID, user.Email, user.Role, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +84,13 @@ func (s *AuthService) Login(email string, password string) (*models.TokenPair, e
 		return nil, domain_errors.ErrInvalidCredentials
 	}
 
-	tokenPair, err := s.TokenService.CreateTokenPair(user.ID, user.Email, user.Role)
+	tx, err := s.TokenService.TokenRepo.Db.Begin()
+
+	if err != nil {
+		return nil, err
+	}
+
+	tokenPair, err := s.TokenService.CreateTokenPair(user.ID, user.Email, user.Role, tx)
 	if err != nil {
 		return nil, err
 	}

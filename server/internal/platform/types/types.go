@@ -6,4 +6,4 @@ const (
 	EnvProd  = "prod"
 )
 
-type IdType uint32
+type IdType uint64

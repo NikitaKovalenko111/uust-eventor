@@ -4,7 +4,9 @@ package user_controller
 import (
 	"errors"
 	"log/slog"
+	"net/http"
 	"strconv"
+	"strings"
 
 	"eventor/internal/platform/types"
 	domain_errors "eventor/internal/user/domain/errors"
@@ -36,15 +38,14 @@ func Init(logger *slog.Logger, userService *user_service.UserService) *UserContr
 func (c *UserController) RegisterRoutes(app *fiber.App, rout string, authMiddleware fiber.Handler) {
 	router := app.Group(rout, authMiddleware)
 
-	router.Get("/me", c.GetMe)      // Текущий пользователь
-	router.Put("/me", c.UpdateMe)   // Обновление своего профиля
+	router.Get("/me", c.GetMe)    // Текущий пользователь
+	router.Put("/me", c.UpdateMe) // Обновление своего профиля
+	router.Put("/me/avatar", c.UpdateAvatar)
+	router.Delete("/me/avatar", c.DeleteAvatar)
+	router.Get("/:id/avatar", c.GetAvatar)
 	router.Get("/:id", c.GetByID)   // Просмотр другого пользователя (опционально)
 	router.Put("/:id", c.Update)    // Обновление другого (только для модераторов)
 	router.Delete("/:id", c.Delete) // Удаление (только для модераторов/админов)
-
-	hRouter := app.Group("/api/v1/users")
-
-	hRouter.Get("/health", c.HealthCheck)
 }
 
 // HealthCheck godoc
@@ -159,6 +160,68 @@ func (c *UserController) UpdateMe(ctx *fiber.Ctx) error {
 	}
 
 	return ctx.Status(fiber.StatusOK).JSON(user_dto.ToResponse(updated))
+}
+
+// UpdateAvatar godoc
+func (c *UserController) UpdateAvatar(ctx *fiber.Ctx) error {
+	userID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok {
+		return ctx.Status(http.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: http.StatusUnauthorized})
+	}
+
+	fileHeader, err := ctx.FormFile("avatar")
+	if err != nil {
+		return ctx.Status(http.StatusBadRequest).JSON(ErrorResponse{Error: "avatar file is required", Code: http.StatusBadRequest})
+	}
+
+	contentType := fileHeader.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "image/") {
+		return ctx.Status(http.StatusBadRequest).JSON(ErrorResponse{Error: "avatar must be an image", Code: http.StatusBadRequest})
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.logger.Error("failed to open avatar file", slog.Any("error", err))
+		return ctx.Status(http.StatusBadRequest).JSON(ErrorResponse{Error: "cannot read avatar file", Code: http.StatusBadRequest})
+	}
+	defer file.Close()
+
+	updated, err := c.userService.SetAvatar(ctx.UserContext(), userID, file, fileHeader.Size, contentType)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "update avatar")
+	}
+
+	return ctx.Status(http.StatusOK).JSON(user_dto.ToResponse(updated))
+}
+
+// DeleteAvatar godoc
+func (c *UserController) DeleteAvatar(ctx *fiber.Ctx) error {
+	userID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok {
+		return ctx.Status(http.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: http.StatusUnauthorized})
+	}
+
+	updated, err := c.userService.DeleteAvatar(ctx.UserContext(), userID)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "delete avatar")
+	}
+
+	return ctx.Status(http.StatusOK).JSON(user_dto.ToResponse(updated))
+}
+
+// GetAvatar godoc
+func (c *UserController) GetAvatar(ctx *fiber.Ctx) error {
+	id, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(http.StatusBadRequest).JSON(ErrorResponse{Error: "invalid user ID", Code: http.StatusBadRequest})
+	}
+
+	avatarURL, err := c.userService.GetAvatarURL(ctx.UserContext(), types.IdType(id))
+	if err != nil {
+		return c.handleServiceError(ctx, err, "get avatar")
+	}
+
+	return ctx.Status(http.StatusOK).JSON(AvatarResponse{URL: avatarURL})
 }
 
 // =====================================================
@@ -332,6 +395,16 @@ func (c *UserController) handleServiceError(ctx *fiber.Ctx, err error, operation
 			Error: "user not found",
 			Code:  fiber.StatusNotFound,
 		})
+	case errors.Is(err, domain_errors.ErrAvatarNotFound):
+		return ctx.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Error: "avatar not found",
+			Code:  fiber.StatusNotFound,
+		})
+	case errors.Is(err, domain_errors.ErrFileStorage):
+		return ctx.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Error: "avatar storage error",
+			Code:  fiber.StatusInternalServerError,
+		})
 	default:
 		return ctx.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Error: "internal server error",
@@ -345,6 +418,10 @@ type ErrorResponse struct {
 	Error   string            `json:"error"`
 	Code    int               `json:"code"`
 	Details map[string]string `json:"details,omitempty"`
+}
+
+type AvatarResponse struct {
+	URL string `json:"url"`
 }
 
 // formatValidationErrors форматирует ошибки validator

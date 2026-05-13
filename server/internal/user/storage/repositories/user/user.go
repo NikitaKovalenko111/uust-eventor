@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"eventor/internal/platform/types"
+	erors "eventor/internal/user/domain/errors"
 	"eventor/internal/user/domain/models"
 	"fmt"
 	"strings"
@@ -67,7 +68,7 @@ func (r *UserRepo) GetByID(ctx context.Context, id types.IdType) (*models.User, 
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("user with id %d not found", id)
+			return nil, fmt.Errorf("%w: user with id %d", erors.ErrNotFound, id)
 		}
 		return nil, fmt.Errorf("database error: %w", err)
 	}
@@ -88,7 +89,7 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("user with email %s not found", email)
+			return nil, fmt.Errorf("%w: user with email %s", erors.ErrNotFound, email)
 		}
 		return nil, fmt.Errorf("database error: %w", err)
 	}
@@ -126,7 +127,7 @@ func (r *UserRepo) Update(ctx context.Context, user *models.User) error {
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("user with id %d not found", user.ID)
+			return fmt.Errorf("%w: user with id %d", erors.ErrNotFound, user.ID)
 		}
 		return fmt.Errorf("database error: %w", err)
 	}
@@ -179,7 +180,7 @@ func (r *UserRepo) UpdatePartial(ctx context.Context, id types.IdType, updates m
 	err := r.db.QueryRowContext(ctx, query, args...).Scan(&updatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("user with id %d not found", id)
+			return fmt.Errorf("%w: user with id %d", erors.ErrNotFound, id)
 		}
 		return fmt.Errorf("database error: %w", err)
 	}
@@ -197,7 +198,7 @@ func (r *UserRepo) Delete(ctx context.Context, id types.IdType) error {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("user with id %d not found", id)
+		return fmt.Errorf("%w: user with id %d", erors.ErrNotFound, id)
 	}
 	return nil
 }

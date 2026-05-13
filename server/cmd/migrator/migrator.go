@@ -82,7 +82,7 @@ func main() {
 
 func openDB() (*sql.DB, error) {
 	cfg := config.MustLoad()
-	st := storage.Init(&cfg.Storage)
+	st := storage.Init(cfg)
 	db := st.Connect()
 
 	if db == nil {

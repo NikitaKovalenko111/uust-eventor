@@ -16,8 +16,9 @@ type HTTP struct {
 
 func Init(services *services.Services, logger *slog.Logger, app *fiber.App, authMiddleware fiber.Handler) *HTTP {
 	return &HTTP{
-		app:         app,
-		controllers: controllers.Init(services, logger),
+		app:            app,
+		controllers:    controllers.Init(services, logger),
+		authMiddleware: authMiddleware,
 	}
 }
 

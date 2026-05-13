@@ -10,12 +10,11 @@ import (
 )
 
 type Config struct {
-	Env        string `yaml:"env" env-default:"local"`
-	Storage    `yaml:"storage"`
-	HTTPServer `yaml:"http_server"`
-	JWT        `yaml:"jwt"`
-	//SMTP       `yaml:"smtp"`
-	//Redis      `yaml:"redis"`
+	Env         string `yaml:"env" env-default:"local"`
+	Storage     `yaml:"storage"`
+	HTTPServer  `yaml:"http_server"`
+	JWT         `yaml:"jwt"`
+	FileStorage `yaml:"file_storage"`
 }
 
 type JWT struct {
@@ -36,6 +35,13 @@ type HTTPServer struct {
 	Address     string        `yaml:"http_address" env-default:"localhost:8080"`
 	Timeout     time.Duration `yaml:"timeout" env-default:"4s"`
 	IdleTimeout time.Duration `yaml:"idle_timeout" env-default:"60s"`
+}
+
+type FileStorage struct {
+	Endpoint  string `yaml:"s3_endpoint" env-required:"true"`
+	AccessKey string `yaml:"s3_access_key" env-required:"true"`
+	SecretKey string `yaml:"s3_secret_key" env-required:"true"`
+	UseSSL    bool   `yaml:"is_ssl" env-default:"false"`
 }
 
 func MustLoad() *Config {

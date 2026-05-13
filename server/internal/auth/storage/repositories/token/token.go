@@ -16,14 +16,14 @@ func Init(db *sql.DB) *TokenRepo {
 	}
 }
 
-func (r *TokenRepo) Create(token *models.Token) (*models.Token, error) {
+func (r *TokenRepo) Create(token *models.Token, tx *sql.Tx) (*models.Token, error) {
 	query := `
 		INSERT INTO auth_tokens (user_id, token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id
 	`
 
-	err := r.Db.QueryRow(query, token.UserId, token.Hash, token.ExpiresAt, token.CreatedAt).Scan(&token.Id)
+	err := tx.QueryRow(query, token.UserId, token.Hash, token.ExpiresAt, token.CreatedAt).Scan(&token.Id)
 
 	if err != nil {
 		return nil, err

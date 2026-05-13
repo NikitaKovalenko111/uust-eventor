@@ -24,10 +24,10 @@ func NewAuthController(authService *auth_service.AuthService, logger *slog.Logge
 	}
 }
 
-func (ac *AuthController) RegisterRoutes(basicRouter fiber.Router, protectedRouter fiber.Router) {
+func (ac *AuthController) RegisterRoutes(basicRouter fiber.Router, authMiddleware fiber.Handler) {
 	basicRouter.Post("/register", ac.register)
 	basicRouter.Post("/login", ac.login)
-	protectedRouter.Post("/refresh", ac.refreshToken)
+	basicRouter.Post("/refresh", authMiddleware, ac.refreshToken)
 }
 
 func (ac *AuthController) login(c *fiber.Ctx) error {
@@ -120,7 +120,7 @@ func (ac *AuthController) refreshToken(c *fiber.Ctx) error {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 	}
 
-	newTokenPair, err := ac.authService.TokenService.RefreshTokenPair(req.RefreshToken, userID, email, role)
+	newTokenPair, err := ac.authService.TokenService.RefreshTokenPair(req.RefreshToken, userID, email, role, nil)
 	if err != nil {
 		if errors.Is(err, domain_errors.ErrInvalidToken) || errors.Is(err, domain_errors.ErrRefreshTokenExpired) {
 			ac.logger.Info("refresh token failed: invalid or expired token", slog.Any("user_id", userID))

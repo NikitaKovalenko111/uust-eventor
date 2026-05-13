@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
+	file_storage "eventor/internal/platform/storage/files"
 	"eventor/internal/platform/types"
 	erors "eventor/internal/user/domain/errors"
 	"eventor/internal/user/domain/models"
@@ -32,12 +35,13 @@ type UserRepository interface {
 
 // UserService бизнес-логика работы с пользователями
 type UserService struct {
-	repo *user_storage.UserRepo
+	repo        *user_storage.UserRepo
+	fileStorage *file_storage.FileStorage
 }
 
 // Init создаёт новый сервис
-func Init(repo *user_storage.UserRepo) *UserService {
-	return &UserService{repo: repo}
+func Init(repo *user_storage.UserRepo, fileStorage *file_storage.FileStorage) *UserService {
+	return &UserService{repo: repo, fileStorage: fileStorage}
 }
 
 // =====================================================
@@ -195,6 +199,99 @@ func (s *UserService) Delete(ctx context.Context, id types.IdType) error {
 	return nil
 }
 
+// =====================================================
+// AVATAR MANAGEMENT
+// =====================================================
+
+func (s *UserService) SetAvatar(ctx context.Context, id types.IdType, content io.Reader, size int64, contentType string) (*models.User, error) {
+	if s.fileStorage == nil {
+		return nil, fmt.Errorf("%w: file storage is not initialized", erors.ErrFileStorage)
+	}
+
+	if _, err := s.repo.GetByID(ctx, id); err != nil {
+		if errors.Is(err, erors.ErrNotFound) {
+			return nil, fmt.Errorf("%w: user %d", erors.ErrUserNotFound, id)
+		}
+		return nil, erors.WrapDB(err)
+	}
+
+	filename, err := s.fileStorage.UploadUserAvatar(ctx, id, content, size, contentType)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", erors.ErrFileStorage, err)
+	}
+
+	updates := map[string]interface{}{
+		"avatar_image_id": sql.NullString{String: filename, Valid: true},
+	}
+	if err := s.repo.UpdatePartial(ctx, id, updates); err != nil {
+		return nil, erors.WrapDB(err)
+	}
+
+	updated, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, erors.WrapDB(err)
+	}
+	updated.PasswordHash = ""
+	return updated, nil
+}
+
+func (s *UserService) DeleteAvatar(ctx context.Context, id types.IdType) (*models.User, error) {
+	if s.fileStorage == nil {
+		return nil, fmt.Errorf("%w: file storage is not initialized", erors.ErrFileStorage)
+	}
+
+	user, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, erors.ErrNotFound) {
+			return nil, fmt.Errorf("%w: user %d", erors.ErrUserNotFound, id)
+		}
+		return nil, erors.WrapDB(err)
+	}
+
+	if !user.AvatarImageID.Valid || strings.TrimSpace(user.AvatarImageID.String) == "" {
+		return nil, erors.ErrAvatarNotFound
+	}
+
+	if err := s.fileStorage.DeleteUserAvatar(ctx, id); err != nil {
+		return nil, fmt.Errorf("%w: %w", erors.ErrFileStorage, err)
+	}
+
+	updates := map[string]interface{}{
+		"avatar_image_id": nil,
+	}
+	if err := s.repo.UpdatePartial(ctx, id, updates); err != nil {
+		return nil, erors.WrapDB(err)
+	}
+
+	updated, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, erors.WrapDB(err)
+	}
+	updated.PasswordHash = ""
+	return updated, nil
+}
+
+func (s *UserService) GetAvatarURL(ctx context.Context, id types.IdType) (string, error) {
+	if s.fileStorage == nil {
+		return "", fmt.Errorf("%w: file storage is not initialized", erors.ErrFileStorage)
+	}
+
+	user, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, erors.ErrNotFound) {
+			return "", fmt.Errorf("%w: user %d", erors.ErrUserNotFound, id)
+		}
+		return "", erors.WrapDB(err)
+	}
+
+	if !user.AvatarImageID.Valid || strings.TrimSpace(user.AvatarImageID.String) == "" {
+		return "", erors.ErrAvatarNotFound
+	}
+
+	return s.fileStorage.GetUserAvatarURL(ctx, id, 15*time.Minute)
+}
+
+// TODO: Delete AUTH
 // =====================================================
 // AUTH
 // =====================================================

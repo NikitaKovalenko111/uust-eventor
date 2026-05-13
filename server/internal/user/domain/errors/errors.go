@@ -34,6 +34,8 @@ var (
 	ErrCourseInvalid   = errors.New("course has invalid format or too long")
 	ErrAboutTooLong    = errors.New("about must not exceed 1000 characters")
 	ErrAvatarIDInvalid = errors.New("avatar_image_id has invalid format")
+	ErrAvatarNotFound  = errors.New("avatar not found")
+	ErrFileStorage     = errors.New("file storage error")
 
 	// Business logic errors
 	ErrNotFound         = errors.New("not found")

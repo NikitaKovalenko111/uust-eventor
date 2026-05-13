@@ -1,6 +1,7 @@
 package token_service
 
 import (
+	"database/sql"
 	"errors"
 	domain_errors "eventor/internal/auth/domain/errors"
 	"eventor/internal/auth/domain/models"
@@ -114,7 +115,7 @@ func (s *TokenService) VerifyRefreshToken(tokenString string) (*models.RefreshTo
 	return claims, nil
 }
 
-func (s *TokenService) CreateTokenPair(userID types.IdType, email string, role string) (*models.TokenPair, error) {
+func (s *TokenService) CreateTokenPair(userID types.IdType, email string, role string, tx *sql.Tx) (*models.TokenPair, error) {
 	accessToken, accessExpiresAt, err := s.GenerateAccessToken(userID, email, role)
 	if err != nil {
 		return nil, errors.Join(domain_errors.ErrTokenGenerationFailed, err)
@@ -127,7 +128,7 @@ func (s *TokenService) CreateTokenPair(userID types.IdType, email string, role s
 
 	token := models.CreateToken(userID, refreshToken, s.cfg.RefreshTokenTTL)
 
-	_, err = s.TokenRepo.Create(token)
+	_, err = s.TokenRepo.Create(token, tx)
 
 	if err != nil {
 		return nil, errors.Join(domain_errors.ErrTokenGenerationFailed, err)
@@ -140,7 +141,21 @@ func (s *TokenService) CreateTokenPair(userID types.IdType, email string, role s
 	}, nil
 }
 
-func (s *TokenService) RefreshTokenPair(refreshTokenString string, userID types.IdType, email string, role string) (*models.TokenPair, error) {
+func (s *TokenService) RefreshTokenPair(refreshTokenString string, userID types.IdType, email string, role string, tx *sql.Tx) (*models.TokenPair, error) {
+	var stx *sql.Tx
+
+	if tx == nil {
+		tx, err := s.TokenRepo.Db.Begin()
+
+		if err != nil {
+			return nil, err
+		}
+
+		stx = tx
+	} else {
+		stx = tx
+	}
+
 	claims, err := s.VerifyRefreshToken(refreshTokenString)
 
 	if err != nil {
@@ -154,5 +169,5 @@ func (s *TokenService) RefreshTokenPair(refreshTokenString string, userID types.
 		return nil, domain_errors.ErrInvalidToken
 	}
 
-	return s.CreateTokenPair(userID, email, role)
+	return s.CreateTokenPair(userID, email, role, stx)
 }

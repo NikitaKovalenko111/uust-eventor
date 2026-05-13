@@ -16,8 +16,7 @@ type Services struct {
 	TokenService *token_service.TokenService
 }
 
-func Init(repos *repositories.Repos, cfg *config.Config, userProvider user_provider.UserProvider) *Services {
-	tokenService := token_service.Init(repos.TokenRepo, &cfg.JWT)
+func Init(repos *repositories.Repos, cfg *config.Config, userProvider user_provider.UserProvider, tokenService *token_service.TokenService) *Services {
 	authService := auth_service.Init(tokenService, userProvider)
 
 	return &Services{
