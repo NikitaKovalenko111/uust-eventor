@@ -33,14 +33,16 @@ func Init(logger *slog.Logger, eventService *event_service.EventService) *EventC
 }
 
 // RegisterRoutes регистрирует маршруты событий (все защищены authMiddleware)
-func (c *EventController) RegisterRoutes(app *fiber.App, rout string, authMiddleware fiber.Handler) {
-	router := app.Group(rout, authMiddleware)
+func (c *EventController) RegisterRoutes(app *fiber.App, rout string, authMiddleware *fiber.Handler) {
+	protectedRouter := app.Group(rout, *authMiddleware)
+	router := app.Group(rout)
 
-	router.Post("/", c.CreateEvent)
 	router.Get("/", c.ListEvents)
 	router.Get("/:id", c.GetEvent)
-	router.Put("/:id", c.UpdateEvent)
-	router.Delete("/:id", c.DeleteEvent)
+
+	protectedRouter.Post("/", c.CreateEvent)
+	protectedRouter.Put("/:id", c.UpdateEvent)
+	protectedRouter.Delete("/:id", c.DeleteEvent)
 }
 
 // =====================================================

@@ -8,23 +8,23 @@ import (
 	"strings"
 	"time"
 
+	"eventor/internal/event/contracts/user_provider"
 	domain_errors "eventor/internal/event/domain/errors"
 	"eventor/internal/event/domain/models"
 	event_repo "eventor/internal/event/storage/repositories/event"
-	user_repository "eventor/internal/user/storage/repositories/user" // для проверки существования создателя
 )
 
 // EventService бизнес-логика работы с событиями
 type EventService struct {
-	eventRepo *event_repo.EventRepo
-	userRepo  *user_repository.UserRepo
+	eventRepo    *event_repo.EventRepo
+	userProvider user_provider.UserProvider
 }
 
 // New создаёт новый сервис
-func Init(eventRepo *event_repo.EventRepo, userRepo *user_repository.UserRepo) *EventService {
+func Init(eventRepo *event_repo.EventRepo, userProvider user_provider.UserProvider) *EventService {
 	return &EventService{
-		eventRepo: eventRepo,
-		userRepo:  userRepo,
+		eventRepo:    eventRepo,
+		userProvider: userProvider,
 	}
 }
 
@@ -278,7 +278,7 @@ func validateUpdateEvent(req *UpdateEventRequest) error {
 // =====================================================
 
 func (s *EventService) verifyCreatorExists(ctx context.Context, creatorID uint64) error {
-	_, err := s.userRepo.GetByID(ctx, creatorID)
+	_, err := s.userProvider.GetByID(ctx, creatorID)
 	if err != nil {
 		// Если пользователя нет в БД
 		return fmt.Errorf("%w: creator %d does not exist", domain_errors.ErrCreatorNotFound, creatorID)

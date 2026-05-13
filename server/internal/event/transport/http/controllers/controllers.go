@@ -1,21 +1,19 @@
 package controllers
 
 import (
-	"eventor/internal/user/services"
-	user_controller "eventor/internal/user/transport/http/controllers/user"
+	"eventor/internal/event/services"
+	event_controller "eventor/internal/event/transport/http/controllers/event"
 	"log/slog"
 )
 
 type Controllers struct {
-	logger         *slog.Logger
-	UserController *user_controller.UserController
-	// Controllers
+	logger          *slog.Logger
+	EventController *event_controller.EventController
 }
 
 func Init(services *services.Services, logger *slog.Logger) *Controllers {
 	return &Controllers{
-		logger:         logger,
-		UserController: user_controller.Init(logger, services.UserService),
-		// Inits of controllers
+		logger:          logger,
+		EventController: event_controller.Init(logger, services.EventService),
 	}
 }

@@ -1,19 +1,20 @@
 package services
 
 import (
+	"eventor/internal/event/contracts/user_provider"
+	event_service "eventor/internal/event/services/usecase/event"
+	"eventor/internal/event/storage/repositories"
 	"eventor/internal/platform/config"
-	user_service "eventor/internal/user/services/usecase/user"
-	"eventor/internal/user/storage/repositories"
 	//"github.com/redis/go-redis/v9"
 	//"gopkg.in/gomail.v2"
 )
 
 type Services struct {
-	UserService *user_service.UserService
+	EventService *event_service.EventService
 }
 
-func Init(repos *repositories.Repos, cfg *config.Config) *Services {
+func Init(repos *repositories.Repos, cfg *config.Config, userProvider user_provider.UserProvider) *Services {
 	return &Services{
-		UserService: user_service.Init(repos.UserRepo),
+		EventService: event_service.Init(repos.EventRepo, userProvider),
 	}
 }
