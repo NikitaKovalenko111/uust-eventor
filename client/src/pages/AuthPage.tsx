@@ -1,0 +1,153 @@
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScreenContainer } from '../components/ScreenContainer';
+import { AppHeader } from '../components/AppHeader';
+import { AnimatedEntry } from '../components/AnimatedEntry';
+import { FormInput } from '../components/FormInput';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { theme } from '../constants/theme';
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { loginRequest, registerRequest } from '../redux/slices/authSlice';
+import { UserRole } from '../types/models';
+
+export const AuthPage = () => {
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector((state) => state.auth);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('user@eventor.ru');
+  const [password, setPassword] = useState('123456');
+  const [role, setRole] = useState<UserRole>('user');
+
+  const onSubmit = () => {
+    if (mode === 'login') {
+      dispatch(loginRequest({ email, password }));
+      return;
+    }
+    dispatch(registerRequest({ name, email, password, role }));
+  };
+
+  return (
+    <ScreenContainer>
+      <AppHeader title="Добро пожаловать" subtitle="Регистрация и авторизация" />
+
+      <AnimatedEntry delay={50}>
+        <View style={styles.panel}>
+          <View style={styles.modeRow}>
+            <Pressable style={[styles.modeButton, mode === 'login' && styles.modeButtonActive]} onPress={() => setMode('login')}>
+              <Text style={[styles.modeText, mode === 'login' && styles.modeTextActive]}>Вход</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.modeButton, mode === 'register' && styles.modeButtonActive]}
+              onPress={() => setMode('register')}
+            >
+              <Text style={[styles.modeText, mode === 'register' && styles.modeTextActive]}>Регистрация</Text>
+            </Pressable>
+          </View>
+
+          {mode === 'register' ? <FormInput label="Имя" value={name} onChangeText={setName} placeholder="Ваше имя" /> : null}
+          <FormInput label="Почта" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+          <FormInput label="Пароль" value={password} onChangeText={setPassword} secureTextEntry />
+
+          {mode === 'register' ? (
+            <View style={styles.roleRow}>
+              <Pressable style={[styles.roleButton, role === 'user' && styles.roleButtonActive]} onPress={() => setRole('user')}>
+                <Text style={[styles.roleText, role === 'user' && styles.roleTextActive]}>Пользователь</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.roleButton, role === 'moderator' && styles.roleButtonActive]}
+                onPress={() => setRole('moderator')}
+              >
+                <Text style={[styles.roleText, role === 'moderator' && styles.roleTextActive]}>Модератор</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {auth.error ? <Text style={styles.error}>{auth.error}</Text> : null}
+
+          <PrimaryButton
+            title={mode === 'login' ? 'Войти' : 'Создать аккаунт'}
+            onPress={onSubmit}
+            loading={auth.loading}
+            disabled={!email || !password || (mode === 'register' && !name)}
+          />
+
+          <Text style={styles.hint}>Демо-вход: user@eventor.ru или moderator@eventor.ru</Text>
+        </View>
+      </AnimatedEntry>
+    </ScreenContainer>
+  );
+};
+
+const styles = StyleSheet.create({
+  panel: {
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  modeRow: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.md,
+    padding: 4,
+    gap: 6,
+  },
+  modeButton: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeButtonActive: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  modeText: {
+    fontSize: 13,
+    color: theme.colors.muted,
+    fontWeight: '600',
+  },
+  modeTextActive: {
+    color: theme.colors.text,
+  },
+  roleRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  roleButton: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.card,
+  },
+  roleButtonActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primarySoft,
+  },
+  roleText: {
+    fontSize: 13,
+    color: theme.colors.muted,
+    fontWeight: '600',
+  },
+  roleTextActive: {
+    color: theme.colors.primary,
+  },
+  error: {
+    color: theme.colors.danger,
+    fontSize: 13,
+  },
+  hint: {
+    color: theme.colors.muted,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+});
