@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { AuthPayload, CreateCommentPayload, CreateEventPayload, EventComment, EventItem, RegisterPayload, User } from '../types/models';
+import { AuthPayload, CreateCommentPayload, CreateEventPayload, EventComment, EventItem, RegisterPayload, User, Attendee } from '../types/models';
 
 type AuthResponse = {
   access_token: string;
@@ -39,6 +39,7 @@ type ServerEventResponse = {
   created_at: string;
   updated_at: string;
   finished?: boolean;
+  relevance_score?: number;
 };
 
 type ServerCommentResponse = {
@@ -65,6 +66,36 @@ type ServerEventsResponse = {
   count: number;
   limit: number;
   offset: number;
+};
+
+type ServerUsersResponse = {
+  users: ServerUserResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+type ServerAttendeeResponse = {
+  id: number;
+  user_id: number;
+  name: string;
+  avatar_image_id?: string | null;
+  joined_at: string;
+};
+
+type ServerAttendeesResponse = {
+  attendees: ServerAttendeeResponse[];
+  count: number;
+};
+
+type ServerIncomingFriendRequest = {
+  request_id: number;
+  user: {
+    id: number;
+    name: string;
+    avatar_image_id?: string | null;
+  };
 };
 
 const extractHost = (rawValue?: string | null) => {
@@ -182,6 +213,8 @@ const serverEventToClient = (eventItem: ServerEventResponse): EventItem => ({
   creatorId: String(eventItem.creator_id),
   shortDescription: buildShortDescription(eventItem.description),
   finished: Boolean(eventItem.finished),
+  relevanceScore: eventItem.relevance_score ?? 0,
+  friendsCount: (eventItem as any).friends_count ?? 0,
 });
 
 const serverCommentToClient = (commentItem: ServerCommentResponse): EventComment => ({
@@ -262,6 +295,95 @@ export const fetchEventCommentsApi = async (eventId: string): Promise<EventComme
     return (response.data.comments ?? []).map(serverCommentToClient);
   } catch (error) {
     throw toApiError(error, 'Не удалось загрузить комментарии');
+  }
+};
+
+export const fetchEventAttendeesApi = async (eventId: string): Promise<Attendee[]> => {
+  try {
+    const response = await apiClient.get<ServerAttendeesResponse>(`/api/v1/events/${eventId}/attendees`);
+    return (response.data.attendees ?? []).map((a) => ({
+      id: String(a.id),
+      userId: String(a.user_id),
+      name: a.name,
+      avatarId: a.avatar_image_id ?? '',
+      joinedAt: a.joined_at,
+    }));
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить список участников');
+  }
+};
+
+export const addFriendApi = async (userId: string): Promise<void> => {
+  try {
+    await apiClient.post(`/api/v1/users/${userId}/friend-requests`, {});
+  } catch (error) {
+    throw toApiError(error, 'Не удалось добавить в друзья');
+  }
+};
+
+export const sendFriendRequestApi = async (userId: string, message = ''): Promise<number> => {
+  try {
+    const response = await apiClient.post<{ request_id: number }>(`/api/v1/users/${userId}/friend-requests`, { message });
+    return response.data.request_id;
+  } catch (error) {
+    throw toApiError(error, 'Не удалось отправить запрос в друзья');
+  }
+};
+
+export const fetchIncomingFriendRequestsApi = async (): Promise<ServerIncomingFriendRequest[]> => {
+  try {
+    const response = await apiClient.get<{ requests: ServerIncomingFriendRequest[] }>('/api/v1/users/me/friend-requests');
+    return response.data.requests ?? [];
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить входящие запросы');
+  }
+};
+
+export const acceptFriendRequestApi = async (requestId: number): Promise<void> => {
+  try {
+    await apiClient.post(`/api/v1/users/friend-requests/${requestId}/accept`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось принять запрос');
+  }
+};
+
+export const rejectFriendRequestApi = async (requestId: number): Promise<void> => {
+  try {
+    await apiClient.post(`/api/v1/users/friend-requests/${requestId}/reject`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось отклонить запрос');
+  }
+};
+
+export const fetchUserApi = async (userId: string): Promise<ServerUserResponse> => {
+  try {
+    const response = await apiClient.get<ServerUserResponse>(`/api/v1/users/${userId}`);
+    return response.data;
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить профиль пользователя');
+  }
+};
+
+export const searchUsersByEmailApi = async (email: string): Promise<User[]> => {
+  try {
+    const response = await apiClient.get<ServerUsersResponse>('/api/v1/users/search/by-email', {
+      params: { email },
+    });
+
+    const users = response.data.users ?? [];
+    return Promise.all(
+      users.map(async (user) => {
+        let avatarUri = '';
+        try {
+          avatarUri = await fetchUserAvatarApi(String(user.id));
+        } catch {
+          avatarUri = '';
+        }
+        return serverUserToClient(user, avatarUri);
+      })
+    );
+  } catch (error) {
+    throw toApiError(error, 'Не удалось выполнить поиск пользователей');
   }
 };
 
@@ -403,10 +525,11 @@ export const deleteAvatarApi = async (): Promise<User> => {
   }
 };
 
-export const fetchEventsApi = async (search = '', limit = 20, offset = 0): Promise<EventItem[]> => {
+export const fetchEventsApi = async (search = '', limit = 20, offset = 0, city = ''): Promise<EventItem[]> => {
   try {
     const params: any = { limit, offset };
     if (search.trim()) params.search = search.trim();
+    if (city.trim()) params.city = city.trim();
     const response = await apiClient.get<ServerEventsResponse>('/api/v1/events', { params });
     return response.data.events.map(serverEventToClient);
   } catch (error) {

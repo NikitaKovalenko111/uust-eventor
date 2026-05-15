@@ -84,10 +84,22 @@ func (r *EventRepo) GetByCreatorID(ctx context.Context, creatorID types.IdType, 
 	return r.queryEvents(ctx, "WHERE e.creator_id = $1", "ORDER BY e.event_date DESC, e.created_at DESC LIMIT $2 OFFSET $3", creatorID, limit, offset)
 }
 
-func (r *EventRepo) List(ctx context.Context, limit, offset int, search string) ([]*models.Event, error) {
+func (r *EventRepo) List(ctx context.Context, limit, offset int, search, city string) ([]*models.Event, error) {
 	search = strings.TrimSpace(search)
+	city = strings.TrimSpace(city)
 	if search == "" {
-		return r.queryEvents(ctx, "", "ORDER BY e.event_date DESC, e.created_at DESC LIMIT $1 OFFSET $2", limit, offset)
+		if city == "" {
+			return r.queryEvents(ctx, "", "ORDER BY e.event_date DESC, e.created_at DESC LIMIT $1 OFFSET $2", limit, offset)
+		}
+
+		return r.queryEvents(
+			ctx,
+			"",
+			"ORDER BY CASE WHEN COALESCE(e.location, '') ILIKE '%' || $1 || '%' THEN 0 ELSE 1 END, e.event_date DESC, e.created_at DESC LIMIT $2 OFFSET $3",
+			city,
+			limit,
+			offset,
+		)
 	}
 
 	// build a prefix tsquery from search terms: each token becomes token:* and joined with &
@@ -134,7 +146,98 @@ func (r *EventRepo) List(ctx context.Context, limit, offset int, search string) 
 		)
 	`
 
-	return r.queryEvents(ctx, whereClause, "ORDER BY e.event_date DESC, e.created_at DESC LIMIT $3 OFFSET $4", tsQuery, search, limit, offset)
+	if city == "" {
+		return r.queryEvents(ctx, whereClause, "ORDER BY e.event_date DESC, e.created_at DESC LIMIT $3 OFFSET $4", tsQuery, search, limit, offset)
+	}
+
+	return r.queryEvents(
+		ctx,
+		whereClause,
+		"ORDER BY CASE WHEN COALESCE(e.location, '') ILIKE '%' || $1 || '%' THEN 0 ELSE 1 END, e.event_date DESC, e.created_at DESC LIMIT $4 OFFSET $5",
+		city,
+		tsQuery,
+		search,
+		limit,
+		offset,
+	)
+}
+
+func (r *EventRepo) ListAll(ctx context.Context, search string) ([]*models.Event, error) {
+	search = strings.TrimSpace(search)
+	if search == "" {
+		return r.queryEvents(ctx, "", "ORDER BY e.event_date DESC, e.created_at DESC")
+	}
+
+	tsQuery := buildPrefixTsQuery(search)
+	if tsQuery == "" {
+		whereClause := `
+		WHERE (
+			to_tsvector('simple',
+				COALESCE(e.title, '') || ' ' ||
+				COALESCE(e.description, '') || ' ' ||
+				COALESCE(e.location, '') || ' ' ||
+				COALESCE(e.event_date::text, '') || ' ' ||
+				COALESCE((SELECT string_agg(et2.tag, ' ') FROM event_tags et2 WHERE et2.event_id = e.id), '')
+			) @@ websearch_to_tsquery('simple', $1)
+			OR (
+				COALESCE(e.title, '') ILIKE '%' || $2 || '%' OR
+				COALESCE(e.description, '') ILIKE '%' || $2 || '%' OR
+				COALESCE(e.location, '') ILIKE '%' || $2 || '%' OR
+				COALESCE((SELECT string_agg(et3.tag, ' ') FROM event_tags et3 WHERE et3.event_id = e.id), '') ILIKE '%' || $2 || '%'
+			)
+		)
+	`
+		return r.queryEvents(ctx, whereClause, "ORDER BY e.event_date DESC, e.created_at DESC", search, search)
+	}
+
+	whereClause := `
+		WHERE (
+			to_tsvector('simple',
+				COALESCE(e.title, '') || ' ' ||
+				COALESCE(e.description, '') || ' ' ||
+				COALESCE(e.location, '') || ' ' ||
+				COALESCE(e.event_date::text, '') || ' ' ||
+				COALESCE((SELECT string_agg(et2.tag, ' ') FROM event_tags et2 WHERE et2.event_id = e.id), '')
+			) @@ to_tsquery('simple', $1)
+			OR (
+				COALESCE(e.title, '') ILIKE '%' || $2 || '%' OR
+				COALESCE(e.description, '') ILIKE '%' || $2 || '%' OR
+				COALESCE(e.location, '') ILIKE '%' || $2 || '%' OR
+				COALESCE((SELECT string_agg(et3.tag, ' ') FROM event_tags et3 WHERE et3.event_id = e.id), '') ILIKE '%' || $2 || '%'
+			)
+		)
+	`
+
+	return r.queryEvents(ctx, whereClause, "ORDER BY e.event_date DESC, e.created_at DESC", tsQuery, search)
+}
+
+func (r *EventRepo) GetUserTagPreferences(ctx context.Context, userID types.IdType) (map[string]int, error) {
+	query := `
+		SELECT et.tag, COUNT(*)
+		FROM event_attendees ea
+		JOIN event_tags et ON et.event_id = ea.event_id
+		WHERE ea.user_id = $1
+		GROUP BY et.tag
+	`
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	defer rows.Close()
+
+	preferences := make(map[string]int)
+	for rows.Next() {
+		var tag string
+		var count int
+		if err := rows.Scan(&tag, &count); err != nil {
+			return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+		}
+		preferences[strings.ToLower(strings.TrimSpace(tag))] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	return preferences, nil
 }
 
 // buildPrefixTsQuery converts a free-form search string into a tsquery that uses prefix
@@ -329,6 +432,49 @@ func (r *EventRepo) ListComments(ctx context.Context, eventID types.IdType) ([]*
 		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
 	}
 	return comments, nil
+}
+
+func (r *EventRepo) ListAttendees(ctx context.Context, eventID types.IdType) ([]*models.EventAttendee, error) {
+	query := `
+		SELECT ea.id, u.id, COALESCE(u.name, ''), COALESCE(u.avatar_image_id, ''), ea.registered_at
+		FROM event_attendees ea
+		JOIN users u ON u.id = ea.user_id
+		WHERE ea.event_id = $1
+		ORDER BY u.name ASC
+	`
+	rows, err := r.db.QueryContext(ctx, query, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	defer rows.Close()
+
+	attendees := make([]*models.EventAttendee, 0)
+	for rows.Next() {
+		var a models.EventAttendee
+		if err := rows.Scan(&a.ID, &a.UserID, &a.Name, &a.AvatarID, &a.JoinedAt); err != nil {
+			return nil, fmt.Errorf("%w: attendee scan error: %v", domain_errors.ErrDatabase, err)
+		}
+		attendees = append(attendees, &a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	return attendees, nil
+}
+
+// CountFriendsRegistered returns how many of user's friends are registered for the given event.
+func (r *EventRepo) CountFriendsRegistered(ctx context.Context, eventID, userID types.IdType) (int, error) {
+	var count int
+	query := `
+		SELECT COUNT(*)
+		FROM event_attendees ea
+		JOIN friends f ON f.friend_id = ea.user_id
+		WHERE f.user_id = $2 AND ea.event_id = $1
+	`
+	if err := r.db.QueryRowContext(ctx, query, eventID, userID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	return count, nil
 }
 
 func (r *EventRepo) AddComment(ctx context.Context, eventID, authorID types.IdType, text string) (*models.EventComment, error) {

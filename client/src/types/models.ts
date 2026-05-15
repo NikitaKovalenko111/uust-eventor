@@ -24,6 +24,16 @@ export type EventItem = {
   attendees: string[];
   creatorId: string;
   finished?: boolean;
+  relevanceScore?: number;
+  friendsCount?: number;
+};
+
+export type Attendee = {
+  id: string;
+  userId: string;
+  name: string;
+  avatarId?: string;
+  joinedAt: string;
 };
 
 export type EventComment = {

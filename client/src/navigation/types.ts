@@ -3,5 +3,8 @@ export type RootStackParamList = {
   UserCabinet: undefined;
   ModeratorCabinet: undefined;
   Events: undefined;
+  UserSearch: undefined;
+  FriendRequests: undefined;
   EventDetails: { eventId: string };
+  Profile: { userId: string };
 };

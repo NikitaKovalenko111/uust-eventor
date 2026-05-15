@@ -52,23 +52,6 @@ func (storage *Storage) Connect() *sql.DB {
 		}
 	}
 
-	// Apply idempotent incremental schema updates for existing databases.
-	if _, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS event_comments (
-			id SERIAL PRIMARY KEY,
-			event_id INTEGER NOT NULL,
-			user_id INTEGER NOT NULL,
-			text TEXT NOT NULL,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-		);
-		CREATE INDEX IF NOT EXISTS idx_event_comments_event_created ON event_comments(event_id, created_at DESC);
-		CREATE INDEX IF NOT EXISTS idx_event_comments_user ON event_comments(user_id);
-	`); err != nil {
-		panic(fmt.Sprintf("Failed to apply incremental schema updates: %v", err))
-	}
-
 	storage.Db = db
 
 	return db

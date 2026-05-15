@@ -7,7 +7,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { ProfileAvatar } from '../components/ProfileAvatar';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { theme } from '../constants/theme';
-import { createEventCommentApi, fetchEventCommentsApi, fetchUserAvatarApi } from '../api/api';
+import { createEventCommentApi, fetchEventCommentsApi, fetchUserAvatarApi, fetchEventAttendeesApi } from '../api/api';
 import { RootStackParamList } from '../navigation/types';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { registerForEventRequest, deleteEventRequest, finishEventRequest } from '../redux/slices/eventsSlice';
@@ -26,6 +26,7 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
   const [commentText, setCommentText] = useState('');
   const [sendingComment, setSendingComment] = useState(false);
   const [commentAvatars, setCommentAvatars] = useState<Record<string, string>>({});
+  const [attendeesList, setAttendeesList] = useState<any[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -75,6 +76,27 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
     };
   }, [eventItem?.id]);
 
+  const isRegistered = eventItem?.attendees?.includes(userId) ?? false;
+  const isOwnEvent = isAuthenticated && eventItem?.creatorId === userId;
+
+  useEffect(() => {
+    let mounted = true;
+    const loadAttendees = async () => {
+      if (!eventItem) return;
+      try {
+        // only load attendees for own events
+        const list = await fetchEventAttendeesApi(eventItem.id);
+        if (mounted && isAuthenticated && eventItem.creatorId === userId) setAttendeesList(list);
+      } catch {
+        if (mounted) setAttendeesList([]);
+      }
+    };
+    void loadAttendees();
+    return () => {
+      mounted = false;
+    };
+  }, [eventItem?.id, isOwnEvent]);
+
   if (!eventItem) {
     return (
       <ScreenContainer>
@@ -83,9 +105,7 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
       </ScreenContainer>
     );
   }
-
-  const isRegistered = eventItem.attendees.includes(userId);
-  const isOwnEvent = isAuthenticated && eventItem.creatorId === userId;
+  
 
   const submitComment = async () => {
     if (!isAuthenticated) {
@@ -143,6 +163,7 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
       <Text style={styles.meta}>Место: {eventItem.location}</Text>
       <Text style={styles.meta}>Теги: {eventItem.tags.join(' • ')}</Text>
       <Text style={styles.meta}>Участники: {eventItem.attendees.length}</Text>
+      {eventItem.friendsCount ? <Text style={styles.meta}>{eventItem.friendsCount} ваших друзей зарегистрированы на мероприятие</Text> : null}
 
       {!isOwnEvent ? (
         <PrimaryButton
@@ -198,6 +219,15 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
               ]);
             }}
           />
+          <View style={{ marginTop: 8 }}>
+            <Text style={{ fontWeight: '700', marginBottom: 6 }}>Зарегистрированные пользователи</Text>
+            {attendeesList.map((a) => (
+              <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <ProfileAvatar uri={a.avatarId || undefined} size={36} />
+                <Text style={{ color: theme.colors.text }} onPress={() => navigation.navigate('Profile', { userId: a.userId })}>{a.name}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       ) : null}
 

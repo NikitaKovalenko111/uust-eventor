@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -58,6 +59,12 @@ type UpdateEventRequest struct {
 
 type CreateCommentRequest struct {
 	Text string `json:"text"`
+}
+
+type RankedEvent struct {
+	Event          *models.Event
+	RelevanceScore int
+	FriendsCount   int
 }
 
 // =====================================================
@@ -119,12 +126,95 @@ func (s *EventService) GetByID(ctx context.Context, id types.IdType) (*models.Ev
 }
 
 // List получает список всех событий с пагинацией
-func (s *EventService) List(ctx context.Context, limit, offset int, search string) ([]*models.Event, error) {
-	events, err := s.eventRepo.List(ctx, limit, offset, search)
+func (s *EventService) List(ctx context.Context, limit, offset int, search, city string, requesterID types.IdType) ([]*RankedEvent, error) {
+	preferences := map[string]int{}
+	if requesterID != 0 {
+		if prefMap, err := s.eventRepo.GetUserTagPreferences(ctx, requesterID); err == nil {
+			preferences = prefMap
+		}
+	}
+
+	if len(preferences) == 0 {
+		events, err := s.eventRepo.List(ctx, limit, offset, search, city)
+		if err != nil {
+			return nil, err
+		}
+		ranked := make([]*RankedEvent, 0, len(events))
+		for _, event := range events {
+			friendsCount := 0
+			if requesterID != 0 {
+				if cnt, err := s.eventRepo.CountFriendsRegistered(ctx, event.ID, requesterID); err == nil {
+					friendsCount = cnt
+				}
+			}
+			ranked = append(ranked, &RankedEvent{Event: event, RelevanceScore: 0, FriendsCount: friendsCount})
+		}
+		// sort: city match first, then by event_date desc/created_at as fallback, then friends
+		sort.SliceStable(ranked, func(i, j int) bool {
+			leftCityMatch := cityMatch(ranked[i].Event.Location, city)
+			rightCityMatch := cityMatch(ranked[j].Event.Location, city)
+			if leftCityMatch != rightCityMatch {
+				return leftCityMatch
+			}
+			if ranked[i].FriendsCount != ranked[j].FriendsCount {
+				return ranked[i].FriendsCount > ranked[j].FriendsCount
+			}
+			if !ranked[i].Event.EventDate.Equal(ranked[j].Event.EventDate) {
+				return ranked[i].Event.EventDate.After(ranked[j].Event.EventDate)
+			}
+			return ranked[i].Event.CreatedAt.After(ranked[j].Event.CreatedAt)
+		})
+		return ranked, nil
+	}
+
+	events, err := s.eventRepo.ListAll(ctx, search)
 	if err != nil {
 		return nil, err
 	}
-	return events, nil
+
+	ranked := make([]*RankedEvent, 0, len(events))
+	for _, event := range events {
+		score := scoreEventByTags(event, preferences)
+		friendsCount := 0
+		if requesterID != 0 {
+			if cnt, err := s.eventRepo.CountFriendsRegistered(ctx, event.ID, requesterID); err == nil {
+				friendsCount = cnt
+			}
+		}
+		ranked = append(ranked, &RankedEvent{Event: event, RelevanceScore: score, FriendsCount: friendsCount})
+	}
+
+	sort.SliceStable(ranked, func(i, j int) bool {
+		leftCityMatch := cityMatch(ranked[i].Event.Location, city)
+		rightCityMatch := cityMatch(ranked[j].Event.Location, city)
+		if leftCityMatch != rightCityMatch {
+			return leftCityMatch
+		}
+
+		if ranked[i].RelevanceScore != ranked[j].RelevanceScore {
+			return ranked[i].RelevanceScore > ranked[j].RelevanceScore
+		}
+
+		if ranked[i].FriendsCount != ranked[j].FriendsCount {
+			return ranked[i].FriendsCount > ranked[j].FriendsCount
+		}
+
+		if !ranked[i].Event.EventDate.Equal(ranked[j].Event.EventDate) {
+			return ranked[i].Event.EventDate.After(ranked[j].Event.EventDate)
+		}
+
+		return ranked[i].Event.CreatedAt.After(ranked[j].Event.CreatedAt)
+	})
+
+	start := offset
+	if start > len(ranked) {
+		start = len(ranked)
+	}
+	end := start + limit
+	if end > len(ranked) {
+		end = len(ranked)
+	}
+	return ranked[start:end], nil
 }
 
 // GetByCreatorID получает события конкретного пользователя
@@ -269,6 +359,21 @@ func (s *EventService) ListComments(ctx context.Context, eventID types.IdType) (
 		return nil, err
 	}
 	return comments, nil
+}
+
+// ListAttendees возвращает список зарегистрированных на событие пользователей
+func (s *EventService) ListAttendees(ctx context.Context, eventID types.IdType) ([]*models.EventAttendee, error) {
+	if _, err := s.eventRepo.GetByID(ctx, eventID); err != nil {
+		if strings.Contains(err.Error(), domain_errors.ErrNotFound.Error()) {
+			return nil, fmt.Errorf("%w: event %d", domain_errors.ErrEventNotFound, eventID)
+		}
+		return nil, err
+	}
+	att, err := s.eventRepo.ListAttendees(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	return att, nil
 }
 
 func (s *EventService) AddComment(ctx context.Context, eventID, authorID types.IdType, req *CreateCommentRequest) (*models.EventComment, error) {
@@ -468,6 +573,27 @@ func trimUpdateRequest(req *UpdateEventRequest) {
 		trimmed := strings.TrimSpace(*req.ImageURI)
 		req.ImageURI = &trimmed
 	}
+}
+
+func scoreEventByTags(event *models.Event, preferences map[string]int) int {
+	score := 0
+	for _, tag := range event.Tags {
+		normalizedTag := strings.ToLower(strings.TrimSpace(tag))
+		if normalizedTag == "" {
+			continue
+		}
+		score += preferences[normalizedTag]
+	}
+	return score
+}
+
+func cityMatch(location, city string) bool {
+	normalizedLocation := strings.ToLower(strings.TrimSpace(location))
+	normalizedCity := strings.ToLower(strings.TrimSpace(city))
+	if normalizedCity == "" {
+		return false
+	}
+	return strings.Contains(normalizedLocation, normalizedCity)
 }
 
 func normalizeTags(tags []string) []string {
