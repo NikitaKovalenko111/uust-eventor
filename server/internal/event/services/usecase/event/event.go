@@ -37,26 +37,58 @@ func Init(eventRepo *event_repo.EventRepo, userProvider user_provider.UserProvid
 // =====================================================
 
 // CreateEventRequest данные для создания события
+
+// CreateEventRequest
+// @Description Request body for creating a new event
 type CreateEventRequest struct {
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	EventDate   string   `json:"event_date"`
-	Location    string   `json:"location"`
-	ImageURI    string   `json:"image_uri,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
+	// Event title
+	// @example "Tech Conference 2024"
+	Title string `json:"title"`
+	// Event description
+	// @example "Annual conference about latest tech trends"
+	Description string `json:"description"`
+	// Event date and time in RFC3339 format
+	// @example "2024-12-15T10:00:00Z"
+	EventDate string `json:"event_date"`
+	// Event location (city, address)
+	// @example "Moscow, Tverskaya 15"
+	Location string `json:"location"`
+	// Optional image ID from UploadImage endpoint
+	// @example "img_abc123xyz"
+	ImageURI string `json:"image_uri,omitempty"`
+	// Event tags for categorization
+	// @example ["technology","conference","networking"]
+	Tags []string `json:"tags,omitempty"`
 }
 
 // UpdateEventRequest данные для обновления события (частичное обновление)
+
+// UpdateEventRequest
+// @Description Request body for updating an existing event (all fields optional)
 type UpdateEventRequest struct {
-	Title       *string   `json:"title,omitempty"`
-	Description *string   `json:"description,omitempty"`
-	EventDate   *string   `json:"event_date,omitempty"`
-	Location    *string   `json:"location,omitempty"`
-	ImageURI    *string   `json:"image_uri,omitempty"`
-	Tags        *[]string `json:"tags,omitempty"`
+	// New event title
+	// @example "Updated Tech Conference 2024"
+	Title *string `json:"title,omitempty"`
+	// New event description
+	// @example "Updated description with new agenda"
+	Description *string `json:"description,omitempty"`
+	// New event date and time in RFC3339 format
+	// @example "2024-12-20T14:00:00Z"
+	EventDate *string `json:"event_date,omitempty"`
+	// New event location
+	// @example "Saint Petersburg, Nevsky 28"
+	Location *string `json:"location,omitempty"`
+	// New image ID (use null to remove image)
+	// @example "img_new789"
+	ImageURI *string `json:"image_uri,omitempty"`
+	// New event tags (replaces existing)
+	// @example ["ai","ml","workshop"]
+	Tags *[]string `json:"tags,omitempty"`
 }
 
 type CreateCommentRequest struct {
+	// Comment text
+	// @example "Great event! Looking forward to attending."
 	Text string `json:"text"`
 }
 

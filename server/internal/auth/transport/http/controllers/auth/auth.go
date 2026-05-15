@@ -32,6 +32,18 @@ func (ac *AuthController) RegisterRoutes(basicRouter fiber.Router, authMiddlewar
 	basicRouter.Post("/refresh", authMiddleware, ac.refreshToken)
 }
 
+// Login godoc
+// @Summary Authenticate user and receive tokens
+// @Description Validates email/password credentials and returns JWT access/refresh token pair on success.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body auth_dto.LoginRequest true "Login credentials"
+// @Success 200 {object} auth_dto.AuthResponse "Authentication successful"
+// @Failure 400 {object} auth_dto.ErrorResponse "Invalid request body or validation failed"
+// @Failure 401 {object} auth_dto.ErrorResponse "Invalid email or password"
+// @Failure 500 {object} auth_dto.ErrorResponse "Internal server error"
+// @Router /login [post]
 func (ac *AuthController) login(c *fiber.Ctx) error {
 	var req auth_dto.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -57,6 +69,18 @@ func (ac *AuthController) login(c *fiber.Ctx) error {
 	})
 }
 
+// Register godoc
+// @Summary Register new user account
+// @Description Creates a new regular user account. Role is forced to "user" regardless of input. Returns JWT token pair on success.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body auth_dto.RegisterRequest true "Registration data"
+// @Success 201 {object} auth_dto.AuthResponse "Tokens issued successfully"
+// @Failure 400 {object} auth_dto.ErrorResponse "Invalid request body or validation failed"
+// @Failure 409 {object} auth_dto.ErrorResponse "Email already registered"
+// @Failure 500 {object} auth_dto.ErrorResponse "Internal server error"
+// @Router /register [post]
 func (ac *AuthController) register(c *fiber.Ctx) error {
 	var req auth_dto.RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -83,7 +107,21 @@ func (ac *AuthController) register(c *fiber.Ctx) error {
 	})
 }
 
-// registerModerator allows an existing moderator to create a new moderator account by email
+// RegisterModerator godoc
+// @Summary Register new moderator account
+// @Description Allows authenticated moderator to create a new moderator account. If password is omitted, a random one is generated and returned in response.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body auth_dto.RegisterRequest true "Moderator registration data (password optional)"
+// @Success 201 {object} auth_dto.ModeratorRegisterResponse "Tokens + optional generated password"
+// @Failure 400 {object} auth_dto.ErrorResponse "Invalid request or missing required fields (name, email)"
+// @Failure 401 {object} auth_dto.ErrorResponse "Unauthorized: invalid or missing auth token"
+// @Failure 403 {object} auth_dto.ErrorResponse "Forbidden: caller is not a moderator"
+// @Failure 409 {object} auth_dto.ErrorResponse "Email already registered"
+// @Failure 500 {object} auth_dto.ErrorResponse "Internal server error"
+// @Router /register/moderator [post]
 func (ac *AuthController) registerModerator(c *fiber.Ctx) error {
 	// check current user's role
 	roleRaw := c.Locals("role")
@@ -128,7 +166,6 @@ func (ac *AuthController) registerModerator(c *fiber.Ctx) error {
 	})
 }
 
-// generateRandomPassword returns a random alphanumeric password of given length
 func generateRandomPassword(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, n)
@@ -138,6 +175,19 @@ func generateRandomPassword(n int) string {
 	return string(b)
 }
 
+// RefreshToken godoc
+// @Summary Refresh authentication tokens
+// @Description Uses a valid refresh token to obtain a new access/refresh token pair. Requires valid authentication context from middleware.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body auth_dto.RefreshTokenRequest true "Refresh token"
+// @Success 200 {object} auth_dto.AuthResponse "New token pair issued"
+// @Failure 400 {object} auth_dto.ErrorResponse "Invalid request body"
+// @Failure 401 {object} auth_dto.ErrorResponse "Invalid, expired or unauthorized refresh token"
+// @Failure 500 {object} auth_dto.ErrorResponse "Internal server error"
+// @Router /refresh [post]
 func (ac *AuthController) refreshToken(c *fiber.Ctx) error {
 	var req auth_dto.RefreshTokenRequest
 	if err := c.BodyParser(&req); err != nil {

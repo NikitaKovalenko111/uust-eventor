@@ -1,0 +1,1536 @@
+basePath: /api/v1
+definitions:
+  eventor_internal_auth_transport_http_dto_auth.AuthResponse:
+    description: Response containing authentication tokens
+    properties:
+      access_token:
+        description: |-
+          JWT access token for authorized requests
+          @example "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM..."
+        type: string
+      expires_at:
+        description: |-
+          Token expiration time in RFC3339 format
+          @example "2024-12-31T23:59:59Z"
+        type: string
+      refresh_token:
+        description: |-
+          JWT refresh token for obtaining new access tokens
+          @example "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyZWZyZXNo..."
+        type: string
+    type: object
+  eventor_internal_auth_transport_http_dto_auth.ErrorResponse:
+    description: Standard error response structure
+    properties:
+      error:
+        description: |-
+          Human-readable error message
+          @example "invalid credentials"
+        type: string
+    type: object
+  eventor_internal_auth_transport_http_dto_auth.LoginRequest:
+    description: Request body for user authentication
+    properties:
+      email:
+        description: |-
+          User's email address (must be valid email format)
+          @example "user@example.com"
+          @MinLength(1)
+        type: string
+      password:
+        description: |-
+          User's password (minimum 6 characters)
+          @example "SecurePass123"
+          @MinLength(6)
+        minLength: 6
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  eventor_internal_auth_transport_http_dto_auth.ModeratorRegisterResponse:
+    description: Response for moderator registration (includes generated password
+      if applicable)
+    properties:
+      access_token:
+        description: |-
+          JWT access token for the new moderator
+          @example "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        type: string
+      expires_at:
+        description: |-
+          Token expiration time in RFC3339 format
+          @example "2024-12-31T23:59:59Z"
+        type: string
+      password:
+        description: |-
+          Generated password (only present if not provided in request)
+          @example "aB3xK9mP2nQ7"
+        type: string
+      refresh_token:
+        description: |-
+          JWT refresh token for the new moderator
+          @example "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        type: string
+    type: object
+  eventor_internal_auth_transport_http_dto_auth.RefreshTokenRequest:
+    description: Request body for refreshing authentication tokens
+    properties:
+      refresh_token:
+        description: |-
+          Refresh token obtained from previous login/registration
+          @example "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM..."}
+        type: string
+    required:
+    - refresh_token
+    type: object
+  eventor_internal_auth_transport_http_dto_auth.RegisterRequest:
+    description: Request body for user/moderator registration
+    properties:
+      city:
+        description: |-
+          User's city of residence (optional)
+          @example "Moscow"
+        type: string
+      email:
+        description: |-
+          User's email address (must be valid and unique)
+          @example "user@example.com"
+        type: string
+      name:
+        description: |-
+          User's full name (minimum 3 characters)
+          @example "Ivan Ivanov"
+          @MinLength(3)
+        minLength: 3
+        type: string
+      password:
+        description: |-
+          User's password (minimum 6 characters)
+          @example "SecurePass123"
+          @MinLength(6)
+        minLength: 6
+        type: string
+      role:
+        description: |-
+          User role: "user" (default) or "moderator" (protected endpoint)
+          @enum user moderator
+          @default "user"
+          @example "user"
+        enum:
+        - user
+        - moderator
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  eventor_internal_event_services_usecase_event.CreateEventRequest:
+    description: Request body for creating a new event
+    properties:
+      description:
+        description: |-
+          Event description
+          @example "Annual conference about latest tech trends"
+        type: string
+      event_date:
+        description: |-
+          Event date and time in RFC3339 format
+          @example "2024-12-15T10:00:00Z"
+        type: string
+      image_uri:
+        description: |-
+          Optional image ID from UploadImage endpoint
+          @example "img_abc123xyz"
+        type: string
+      location:
+        description: |-
+          Event location (city, address)
+          @example "Moscow, Tverskaya 15"
+        type: string
+      tags:
+        description: |-
+          Event tags for categorization
+          @example ["technology","conference","networking"]
+        items:
+          type: string
+        type: array
+      title:
+        description: |-
+          Event title
+          @example "Tech Conference 2024"
+        type: string
+    type: object
+  eventor_internal_event_services_usecase_event.UpdateEventRequest:
+    description: Request body for updating an existing event (all fields optional)
+    properties:
+      description:
+        description: |-
+          New event description
+          @example "Updated description with new agenda"
+        type: string
+      event_date:
+        description: |-
+          New event date and time in RFC3339 format
+          @example "2024-12-20T14:00:00Z"
+        type: string
+      image_uri:
+        description: |-
+          New image ID (use null to remove image)
+          @example "img_new789"
+        type: string
+      location:
+        description: |-
+          New event location
+          @example "Saint Petersburg, Nevsky 28"
+        type: string
+      tags:
+        description: |-
+          New event tags (replaces existing)
+          @example ["ai","ml","workshop"]
+        items:
+          type: string
+        type: array
+      title:
+        description: |-
+          New event title
+          @example "Updated Tech Conference 2024"
+        type: string
+    type: object
+  eventor_internal_event_transport_http_dto_event.CommentListResponse:
+    description: Paginated list of comments
+    properties:
+      comments:
+        description: List of comments
+        items:
+          $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.CommentResponse'
+        type: array
+      count:
+        description: |-
+          Total number of comments
+          @example 42
+        type: integer
+    type: object
+  eventor_internal_event_transport_http_dto_event.CommentResponse:
+    description: Comment information
+    properties:
+      author_id:
+        description: |-
+          Author user ID
+          @example 67890
+        type: integer
+      author_name:
+        description: |-
+          Author display name
+          @example "Ivan Ivanov"
+        type: string
+      created_at:
+        description: |-
+          Creation timestamp in RFC3339 format
+          @example "2024-01-16T10:15:00Z"
+        type: string
+      event_id:
+        description: |-
+          Associated event ID
+          @example 12345
+        type: integer
+      id:
+        description: |-
+          Unique comment identifier
+          @example 999
+        type: integer
+      text:
+        description: |-
+          Comment text
+          @example "Great event!"
+        type: string
+    type: object
+  eventor_internal_event_transport_http_dto_event.CreateCommentRequest:
+    properties:
+      text:
+        maxLength: 2000
+        type: string
+    required:
+    - text
+    type: object
+  eventor_internal_event_transport_http_dto_event.EventResponse:
+    description: Full event information returned by the API
+    properties:
+      attendees:
+        description: |-
+          List of registered attendee user IDs (as strings)
+          @example ["67890","67891"]
+        items:
+          type: string
+        type: array
+      created_at:
+        description: |-
+          Creation timestamp in RFC3339 format
+          @example "2024-01-15T08:30:00Z"
+        type: string
+      creator_id:
+        description: |-
+          Creator user ID
+          @example 67890
+        type: integer
+      description:
+        description: |-
+          Event description
+          @example "Annual conference about latest tech trends"
+        type: string
+      event_date:
+        description: |-
+          Event date and time in RFC3339 format
+          @example "2024-12-15T10:00:00Z"
+        type: string
+      finished:
+        description: |-
+          Whether event is marked as finished
+          @example false
+        type: boolean
+      id:
+        description: |-
+          Unique event identifier
+          @example 12345
+        type: integer
+      image_id:
+        description: |-
+          Image ID if cover image is set
+          @example "img_abc123xyz"
+        type: string
+      location:
+        description: |-
+          Event location
+          @example "Moscow, Tverskaya 15"
+        type: string
+      tags:
+        description: |-
+          Event tags
+          @example ["technology","conference"]]
+        items:
+          type: string
+        type: array
+      title:
+        description: |-
+          Event title
+          @example "Tech Conference 2024"
+        type: string
+      updated_at:
+        description: |-
+          Last update timestamp in RFC3339 format
+          @example "2024-01-20T14:22:00Z"
+        type: string
+    type: object
+  eventor_internal_user_transport_http_dto_user.HealthCheckResponse:
+    description: Health check response
+    properties:
+      status:
+        description: |-
+          HTTP status code indicating service health
+          @example 200
+        type: integer
+    type: object
+  eventor_internal_user_transport_http_dto_user.UpdateUserRequest:
+    description: Request body for updating user profile. All fields are optional;
+      null means "do not change".
+    properties:
+      about:
+        description: |-
+          Short bio or about me section (max 1000 characters)
+          @example "Software engineer passionate about Go and distributed systems"
+          @MaxLength(1000)
+        maxLength: 1000
+        type: string
+      avatar_image_id:
+        description: |-
+          Reference to uploaded avatar image ID (optional)
+          @example "img_abc123"
+          @MaxLength(128)
+        maxLength: 128
+        type: string
+      city:
+        description: |-
+          User's city of residence (2-128 characters)
+          @example "Moscow"
+          @MinLength(2) @MaxLength(128)
+        maxLength: 128
+        minLength: 2
+        type: string
+      course:
+        description: |-
+          Course or year of study (optional)
+          @example "4"
+          @MaxLength(10)
+        maxLength: 10
+        type: string
+      email:
+        description: |-
+          User's email address (must be valid and unique)
+          @example "user@example.com"
+          @Format email
+        maxLength: 255
+        type: string
+      faculty:
+        description: |-
+          University faculty or department (optional)
+          @example "Faculty of Computer Science"
+          @MaxLength(255)
+        maxLength: 255
+        type: string
+      name:
+        description: |-
+          User's display name (2-255 characters)
+          @example "Ivan Ivanov"
+          @MinLength(2) @MaxLength(255)
+        maxLength: 255
+        minLength: 2
+        type: string
+      password:
+        description: |-
+          New password (8-128 characters, only for admin flows)
+          @example "NewSecurePass123!"
+          @MinLength(8) @MaxLength(128)
+        maxLength: 128
+        minLength: 8
+        type: string
+      role:
+        description: |-
+          User role: "user" or "moderator" (admin-only field)
+          @enum user moderator
+          @example "user"
+        enum:
+        - user
+        - moderator
+        type: string
+    type: object
+  eventor_internal_user_transport_http_dto_user.UserResponse:
+    description: Public user profile information
+    properties:
+      about:
+        description: |-
+          Short bio or about me section
+          @example "Software engineer passionate about Go"
+        type: string
+      avatar_image_id:
+        description: |-
+          Reference to avatar image ID if set
+          @example "img_abc123"
+        type: string
+      city:
+        description: |-
+          User's city of residence
+          @example "Moscow"
+        type: string
+      course:
+        description: |-
+          Course or year of study
+          @example "4"
+        type: string
+      created_at:
+        description: |-
+          Account creation timestamp in RFC3339 format
+          @example "2024-01-15T08:30:00Z"
+        type: string
+      email:
+        description: |-
+          User's email address
+          @example "user@example.com"
+        type: string
+      faculty:
+        description: |-
+          University faculty or department
+          @example "Faculty of Computer Science"
+        type: string
+      id:
+        description: |-
+          Unique user identifier
+          @example 12345
+        type: integer
+      name:
+        description: |-
+          User's display name
+          @example "Ivan Ivanov"
+        type: string
+      role:
+        description: |-
+          User role: "user" or "moderator"
+          @example "user"
+        type: string
+      updated_at:
+        description: |-
+          Last profile update timestamp in RFC3339 format
+          @example "2024-02-20T14:22:00Z"
+        type: string
+    type: object
+  internal_event_transport_http_controllers_event.ErrorResponse:
+    description: Standard error response format
+    properties:
+      code:
+        description: |-
+          HTTP status code
+          @example 404
+        type: integer
+      details:
+        additionalProperties:
+          type: string
+        description: |-
+          Detailed validation errors (if applicable)
+          @example {"title": "min length is 3"}
+        type: object
+      error:
+        description: |-
+          Human-readable error message
+          @example "event not found"
+        type: string
+    type: object
+  internal_event_transport_http_controllers_event.EventImageResponse:
+    description: Response after successful image upload
+    properties:
+      image_id:
+        description: |-
+          Unique image identifier in storage
+          @example "img_abc123xyz"
+        type: string
+      url:
+        description: |-
+          URL to retrieve the image file
+          @example "/api/v1/events/images/img_abc123xyz/file"
+        type: string
+    type: object
+  internal_event_transport_http_controllers_event.ListResponse:
+    description: Paginated list of events
+    properties:
+      count:
+        description: |-
+          Number of events in current page
+          @example 20
+        type: integer
+      events:
+        description: List of events
+        items:
+          $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse'
+        type: array
+      limit:
+        description: |-
+          Requested page size
+          @example 20
+        type: integer
+      offset:
+        description: |-
+          Requested offset
+          @example 0
+        type: integer
+    type: object
+  internal_user_transport_http_controllers_user.AvatarResponse:
+    description: Response containing avatar data (for GetAvatar endpoint)
+    properties:
+      data_url:
+        description: |-
+          Avatar as data URL (base64-encoded, for inline display)
+          @example "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+        type: string
+      url:
+        description: |-
+          Direct URL to fetch avatar file
+          @example "/api/v1/users/12345/avatar/file"
+        type: string
+    type: object
+  internal_user_transport_http_controllers_user.ErrorResponse:
+    description: Standard error response format
+    properties:
+      code:
+        description: |-
+          HTTP status code
+          @example 404
+        type: integer
+      details:
+        additionalProperties:
+          type: string
+        description: |-
+          Detailed validation errors (if applicable)
+          @example {"email": "must be valid email", "name": "is required"}
+        type: object
+      error:
+        description: |-
+          Human-readable error message
+          @example "user not found"
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@eventor.local
+    name: API Support
+    url: https://eventor.local/support
+  description: 'Platform for event management: authentication, user profiles, events
+    with comments and registration'
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Eventor API
+  version: "1.0"
+paths:
+  /api/v1/events:
+    get:
+      description: Get paginated list of events with optional search filter
+      parameters:
+      - default: 20
+        description: Items per page (1-100)
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset for pagination
+        in: query
+        minimum: 0
+        name: offset
+        type: integer
+      - description: Search by title or description
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of events
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ListResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List events
+      tags:
+      - events
+    post:
+      consumes:
+      - application/json
+      description: Create an event by authenticated user. Only creator can modify/delete
+        this event later.
+      parameters:
+      - description: Event creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventor_internal_event_services_usecase_event.CreateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Event created successfully
+          schema:
+            $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse'
+        "400":
+          description: Invalid request body or validation failed
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "401":
+          description: 'Unauthorized: invalid or missing token'
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "403":
+          description: 'Forbidden: insufficient permissions'
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create new event
+      tags:
+      - events
+  /api/v1/events/{id}:
+    delete:
+      description: Permanently delete an event. Only the creator can delete their
+        event.
+      parameters:
+      - description: Event ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Event deleted successfully (no content)
+        "400":
+          description: Invalid event ID
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "403":
+          description: 'Forbidden: not the event creator'
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "404":
+          description: Event not found
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete event
+      tags:
+      - events
+    get:
+      description: Returns full event details by numeric ID
+      parameters:
+      - description: Event ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Event found
+          schema:
+            $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse'
+        "400":
+          description: Invalid ID format
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "404":
+          description: Event not found
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get event by ID
+      tags:
+      - events
+    put:
+      consumes:
+      - application/json
+      description: Update event fields. Only the creator can modify their event.
+      parameters:
+      - description: Event ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Fields to update (all optional)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventor_internal_event_services_usecase_event.UpdateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Event updated successfully
+          schema:
+            $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse'
+        "400":
+          description: Invalid request or validation failed
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "403":
+          description: 'Forbidden: not the event creator'
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "404":
+          description: Event not found
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update event
+      tags:
+      - events
+  /api/v1/events/{id}/comments:
+    get:
+      description: Get all comments for a specific event
+      parameters:
+      - description: Event ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of comments
+          schema:
+            $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.CommentListResponse'
+        "400":
+          description: Invalid event ID
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "404":
+          description: Event not found
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List event comments
+      tags:
+      - events
+    post:
+      consumes:
+      - application/json
+      description: Add a new comment to the event by authenticated user
+      parameters:
+      - description: Event ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Comment text
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.CreateCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Comment created successfully
+          schema:
+            $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.CommentResponse'
+        "400":
+          description: Invalid request or validation failed
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "404":
+          description: Event not found
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add comment to event
+      tags:
+      - events
+  /api/v1/events/{id}/finish:
+    post:
+      description: Mark event as finished. Only the creator can finish their event.
+      parameters:
+      - description: Event ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Event marked as finished
+          schema:
+            $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse'
+        "400":
+          description: Invalid event ID
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "403":
+          description: 'Forbidden: not the event creator'
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "404":
+          description: Event not found
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Finish event
+      tags:
+      - events
+  /api/v1/events/{id}/register:
+    delete:
+      description: Remove authenticated user's registration from the event
+      parameters:
+      - description: Event ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully unregistered
+          schema:
+            $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse'
+        "400":
+          description: Invalid event ID
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "404":
+          description: Event or registration not found
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unregister from event
+      tags:
+      - events
+    post:
+      description: Register authenticated user for participation in the event
+      parameters:
+      - description: Event ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully registered
+          schema:
+            $ref: '#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse'
+        "400":
+          description: Invalid event ID
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "404":
+          description: Event not found
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "409":
+          description: Already registered for this event
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Register for event
+      tags:
+      - events
+  /api/v1/events/image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload image file for event cover. Returns storage key and URL.
+        Accepts multipart/form-data.
+      parameters:
+      - description: Image file (JPEG, PNG, WebP)
+        in: formData
+        name: image
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Image uploaded successfully
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.EventImageResponse'
+        "400":
+          description: Invalid file or not an image
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "500":
+          description: File storage error
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload event cover image
+      tags:
+      - events
+  /api/v1/events/images/{image_id}/file:
+    get:
+      description: Download event cover image by image ID. Returns raw image bytes.
+      parameters:
+      - description: Image ID
+        in: path
+        name: image_id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: Image file
+          schema:
+            type: file
+        "400":
+          description: Invalid image ID
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "404":
+          description: Image not found
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+        "500":
+          description: Storage error
+          schema:
+            $ref: '#/definitions/internal_event_transport_http_controllers_event.ErrorResponse'
+      summary: Get event image file
+      tags:
+      - events
+  /api/v1/users/{id}:
+    delete:
+      description: Permanently delete user account. Requires moderator role.
+      parameters:
+      - description: User ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: User deleted successfully (no content)
+        "400":
+          description: Invalid user ID
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "403":
+          description: 'Forbidden: moderators only'
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete user (admin)
+      tags:
+      - users-admin
+    get:
+      description: Returns public profile information of specified user
+      parameters:
+      - description: User ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User profile retrieved
+          schema:
+            $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse'
+        "400":
+          description: Invalid user ID format
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user by ID
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Update any user's profile. Requires moderator role. All fields
+        optional.
+      parameters:
+      - description: User ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      - description: Fields to update (all optional)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Profile updated successfully
+          schema:
+            $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse'
+        "400":
+          description: Invalid request or validation failed
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "403":
+          description: 'Forbidden: moderators only'
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "409":
+          description: 'Conflict: email already exists'
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user profile (admin)
+      tags:
+      - users-admin
+  /api/v1/users/{id}/avatar:
+    get:
+      description: Returns avatar of specified user as base64 data URL. Requires authentication.
+      parameters:
+      - description: User ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Avatar data URL
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.AvatarResponse'
+        "400":
+          description: Invalid user ID
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "404":
+          description: User or avatar not found
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get avatar as data URL
+      tags:
+      - users
+  /api/v1/users/{id}/avatar/file:
+    get:
+      description: Download avatar image file directly. Public endpoint (no auth required).
+      parameters:
+      - description: User ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: Avatar image file
+          schema:
+            type: file
+        "400":
+          description: Invalid user ID
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "404":
+          description: User or avatar not found
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "500":
+          description: File read error
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      summary: Get avatar as raw file
+      tags:
+      - users
+  /api/v1/users/me:
+    get:
+      description: Returns profile of the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Profile retrieved successfully
+          schema:
+            $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse'
+        "401":
+          description: 'Unauthorized: invalid or missing token'
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my profile
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Update authenticated user's profile. Email and role cannot be changed
+        via this endpoint.
+      parameters:
+      - description: Profile fields to update (all optional)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Profile updated successfully
+          schema:
+            $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse'
+        "400":
+          description: Invalid request body or validation failed
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "403":
+          description: 'Forbidden: email/role change not allowed via this endpoint'
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "409":
+          description: 'Conflict: email already exists'
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update my profile
+      tags:
+      - users
+  /api/v1/users/me/avatar:
+    delete:
+      description: Remove avatar from authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Avatar deleted successfully
+          schema:
+            $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "404":
+          description: Avatar not found
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete my avatar
+      tags:
+      - users
+    put:
+      consumes:
+      - multipart/form-data
+      description: Upload new avatar image for authenticated user. Accepts multipart/form-data.
+      parameters:
+      - description: Avatar image file (JPEG, PNG, WebP)
+        in: formData
+        name: avatar
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Avatar updated successfully
+          schema:
+            $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse'
+        "400":
+          description: Invalid file or not an image
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+        "500":
+          description: File storage error
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update my avatar
+      tags:
+      - users
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Returns service health status. Public endpoint.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.HealthCheckResponse'
+      summary: Health check endpoint
+      tags:
+      - health
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Validates email/password credentials and returns JWT access/refresh
+        token pair on success.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authentication successful
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.AuthResponse'
+        "400":
+          description: Invalid request body or validation failed
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "401":
+          description: Invalid email or password
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+      summary: Authenticate user and receive tokens
+      tags:
+      - auth
+  /refresh:
+    post:
+      consumes:
+      - application/json
+      description: Uses a valid refresh token to obtain a new access/refresh token
+        pair. Requires valid authentication context from middleware.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: New token pair issued
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.AuthResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "401":
+          description: Invalid, expired or unauthorized refresh token
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Refresh authentication tokens
+      tags:
+      - auth
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new regular user account. Role is forced to "user" regardless
+        of input. Returns JWT token pair on success.
+      parameters:
+      - description: Registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Tokens issued successfully
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.AuthResponse'
+        "400":
+          description: Invalid request body or validation failed
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "409":
+          description: Email already registered
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+      summary: Register new user account
+      tags:
+      - auth
+  /register/moderator:
+    post:
+      consumes:
+      - application/json
+      description: Allows authenticated moderator to create a new moderator account.
+        If password is omitted, a random one is generated and returned in response.
+      parameters:
+      - description: Moderator registration data (password optional)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Tokens + optional generated password
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ModeratorRegisterResponse'
+        "400":
+          description: Invalid request or missing required fields (name, email)
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "401":
+          description: 'Unauthorized: invalid or missing auth token'
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "403":
+          description: 'Forbidden: caller is not a moderator'
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "409":
+          description: Email already registered
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Register new moderator account
+      tags:
+      - auth
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: 'Enter JWT token in format: `Bearer <your_token_here>`. Token obtained
+      from /auth/login or /auth/register.'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
+tags:
+- description: 'Authentication and authorization: login, registration, token refresh'
+  name: auth
+- description: 'User profile management: get/update own profile, avatar operations'
+  name: users
+- description: 'Administrative user operations: update/delete any user (moderator
+    only)'
+  name: users-admin
+- description: 'Event management: CRUD, comments, registration, images'
+  name: events
+- description: Service health checks
+  name: health

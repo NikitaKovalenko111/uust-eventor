@@ -67,19 +67,19 @@ func (c *EventController) RegisterRoutes(app *fiber.App, rout string, authMiddle
 // =====================================================
 
 // CreateEvent godoc
-//
-//	@Summary		Create new event
-//	@Description	Create an event by authenticated user
-//	@Tags			events
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body		event_service.CreateEventRequest	true	"Event data"
-//	@Success		201		{object}	event_dto.EventResponse
-//	@Failure		400		{object}	ErrorResponse
-//	@Failure		401		{object}	ErrorResponse
-//	@Failure		403		{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/events [post]
+// @Summary Create new event
+// @Description Create an event by authenticated user. Only creator can modify/delete this event later.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Param request body event_service.CreateEventRequest true "Event creation data"
+// @Success 201 {object} event_dto.EventResponse "Event created successfully"
+// @Failure 400 {object} ErrorResponse "Invalid request body or validation failed"
+// @Failure 401 {object} ErrorResponse "Unauthorized: invalid or missing token"
+// @Failure 403 {object} ErrorResponse "Forbidden: insufficient permissions"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/events [post]
 func (c *EventController) CreateEvent(ctx *fiber.Ctx) error {
 	creatorID, ok := ctx.Locals("user_id").(types.IdType)
 	if !ok || creatorID == 0 {
@@ -112,18 +112,18 @@ func (c *EventController) CreateEvent(ctx *fiber.Ctx) error {
 }
 
 // UploadImage godoc
-//
-//	@Summary		Upload event cover image
-//	@Description	Upload image for event cover and receive storage key
-//	@Tags			events
-//	@Accept			multipart/form-data
-//	@Produce		json
-//	@Param			image	formData	file	true	"Cover image"
-//	@Success		200	{object}	EventImageResponse
-//	@Failure		400	{object}	ErrorResponse
-//	@Failure		401	{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/events/image [post]
+// @Summary Upload event cover image
+// @Description Upload image file for event cover. Returns storage key and URL. Accepts multipart/form-data.
+// @Tags events
+// @Accept multipart/form-data
+// @Produce json
+// @Param image formData file true "Image file (JPEG, PNG, WebP)"
+// @Success 200 {object} EventImageResponse "Image uploaded successfully"
+// @Failure 400 {object} ErrorResponse "Invalid file or not an image"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 500 {object} ErrorResponse "File storage error"
+// @Security BearerAuth
+// @Router /api/v1/events/image [post]
 func (c *EventController) UploadImage(ctx *fiber.Ctx) error {
 	if c.fileStorage == nil {
 		return ctx.Status(http.StatusInternalServerError).JSON(ErrorResponse{Error: "file storage is not initialized", Code: http.StatusInternalServerError})
@@ -168,17 +168,16 @@ func (c *EventController) UploadImage(ctx *fiber.Ctx) error {
 // =====================================================
 
 // GetEvent godoc
-//
-//	@Summary		Get event by ID
-//	@Description	Returns event details
-//	@Tags			events
-//	@Produce		json
-//	@Param			id	path		int	true	"Event ID"
-//	@Success		200	{object}	event_dto.EventResponse
-//	@Failure		400	{object}	ErrorResponse
-//	@Failure		404	{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/events/{id} [get]
+// @Summary Get event by ID
+// @Description Returns full event details by numeric ID
+// @Tags events
+// @Produce json
+// @Param id path int true "Event ID" minimum(1)
+// @Success 200 {object} event_dto.EventResponse "Event found"
+// @Failure 400 {object} ErrorResponse "Invalid ID format"
+// @Failure 404 {object} ErrorResponse "Event not found"
+// @Security BearerAuth
+// @Router /api/v1/events/{id} [get]
 func (c *EventController) GetEvent(ctx *fiber.Ctx) error {
 	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 32)
 
@@ -198,6 +197,17 @@ func (c *EventController) GetEvent(ctx *fiber.Ctx) error {
 	return ctx.Status(fiber.StatusOK).JSON(event_dto.ToResponse(event))
 }
 
+// GetImageFile godoc
+// @Summary Get event image file
+// @Description Download event cover image by image ID. Returns raw image bytes.
+// @Tags events
+// @Produce octet-stream
+// @Param image_id path string true "Image ID"
+// @Success 200 {file} binary "Image file"
+// @Failure 400 {object} ErrorResponse "Invalid image ID"
+// @Failure 404 {object} ErrorResponse "Image not found"
+// @Failure 500 {object} ErrorResponse "Storage error"
+// @Router /api/v1/events/images/{image_id}/file [get]
 func (c *EventController) GetImageFile(ctx *fiber.Ctx) error {
 	if c.fileStorage == nil {
 		return ctx.Status(http.StatusInternalServerError).JSON(ErrorResponse{Error: "file storage is not initialized", Code: http.StatusInternalServerError})
@@ -233,17 +243,17 @@ func (c *EventController) GetImageFile(ctx *fiber.Ctx) error {
 }
 
 // ListEvents godoc
-//
-//	@Summary		List events
-//	@Description	Get paginated list of events
-//	@Tags			events
-//	@Produce		json
-//	@Param			limit	query		int	false	"Items per page"	default(20)
-//	@Param			offset	query		int	false	"Offset"			default(0)
-//	@Success		200		{object}	ListResponse
-//	@Failure		400		{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/events [get]
+// @Summary List events
+// @Description Get paginated list of events with optional search filter
+// @Tags events
+// @Produce json
+// @Param limit query int false "Items per page (1-100)" default(20) minimum(1) maximum(100)
+// @Param offset query int false "Offset for pagination" default(0) minimum(0)
+// @Param search query string false "Search by title or description"
+// @Success 200 {object} ListResponse "List of events"
+// @Failure 400 {object} ErrorResponse "Invalid query parameters"
+// @Security BearerAuth
+// @Router /api/v1/events [get]
 func (c *EventController) ListEvents(ctx *fiber.Ctx) error {
 	limit := ctx.QueryInt("limit", 20)
 	offset := ctx.QueryInt("offset", 0)
@@ -278,6 +288,17 @@ func (c *EventController) ListEvents(ctx *fiber.Ctx) error {
 	})
 }
 
+// ListComments godoc
+// @Summary List event comments
+// @Description Get all comments for a specific event
+// @Tags events
+// @Produce json
+// @Param id path int true "Event ID" minimum(1)
+// @Success 200 {object} event_dto.CommentListResponse "List of comments"
+// @Failure 400 {object} ErrorResponse "Invalid event ID"
+// @Failure 404 {object} ErrorResponse "Event not found"
+// @Security BearerAuth
+// @Router /api/v1/events/{id}/comments [get]
 func (c *EventController) ListComments(ctx *fiber.Ctx) error {
 	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
 	if err != nil {
@@ -297,20 +318,21 @@ func (c *EventController) ListComments(ctx *fiber.Ctx) error {
 // =====================================================
 
 // UpdateEvent godoc
-//
-//	@Summary		Update event
-//	@Description	Update event (only creator can modify)
-//	@Tags			events
-//	@Accept			json
-//	@Produce		json
-//	@Param			id		path		int								true	"Event ID"
-//	@Param			request	body		event_service.UpdateEventRequest	true	"Update data"
-//	@Success		200		{object}	event_dto.EventResponse
-//	@Failure		400		{object}	ErrorResponse
-//	@Failure		403		{object}	ErrorResponse	"Forbidden"
-//	@Failure		404		{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/events/{id} [put]
+// @Summary Update event
+// @Description Update event fields. Only the creator can modify their event.
+// @Tags events
+// @Accept json
+// @Produce json
+// @Param id path int true "Event ID" minimum(1)
+// @Param request body event_service.UpdateEventRequest true "Fields to update (all optional)"
+// @Success 200 {object} event_dto.EventResponse "Event updated successfully"
+// @Failure 400 {object} ErrorResponse "Invalid request or validation failed"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden: not the event creator"
+// @Failure 404 {object} ErrorResponse "Event not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/events/{id} [put]
 func (c *EventController) UpdateEvent(ctx *fiber.Ctx) error {
 	creatorID, _ := ctx.Locals("user_id").(types.IdType)
 	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
@@ -351,18 +373,18 @@ func (c *EventController) UpdateEvent(ctx *fiber.Ctx) error {
 // =====================================================
 
 // DeleteEvent godoc
-//
-//	@Summary		Delete event
-//	@Description	Delete event (only creator can delete)
-//	@Tags			events
-//	@Produce		json
-//	@Param			id	path		int	true	"Event ID"
-//	@Success		204	"Deleted"
-//	@Failure		400	{object}	ErrorResponse
-//	@Failure		403	{object}	ErrorResponse	"Forbidden"
-//	@Failure		404	{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/events/{id} [delete]
+// @Summary Delete event
+// @Description Permanently delete an event. Only the creator can delete their event.
+// @Tags events
+// @Produce json
+// @Param id path int true "Event ID" minimum(1)
+// @Success 204 "Event deleted successfully (no content)"
+// @Failure 400 {object} ErrorResponse "Invalid event ID"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden: not the event creator"
+// @Failure 404 {object} ErrorResponse "Event not found"
+// @Security BearerAuth
+// @Router /api/v1/events/{id} [delete]
 func (c *EventController) DeleteEvent(ctx *fiber.Ctx) error {
 	creatorID, _ := ctx.Locals("user_id").(types.IdType)
 	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
@@ -382,6 +404,19 @@ func (c *EventController) DeleteEvent(ctx *fiber.Ctx) error {
 	return ctx.SendStatus(fiber.StatusNoContent)
 }
 
+// RegisterEvent godoc
+// @Summary Register for event
+// @Description Register authenticated user for participation in the event
+// @Tags events
+// @Produce json
+// @Param id path int true "Event ID" minimum(1)
+// @Success 200 {object} event_dto.EventResponse "Successfully registered"
+// @Failure 400 {object} ErrorResponse "Invalid event ID"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "Event not found"
+// @Failure 409 {object} ErrorResponse "Already registered for this event"
+// @Security BearerAuth
+// @Router /api/v1/events/{id}/register [post]
 func (c *EventController) RegisterEvent(ctx *fiber.Ctx) error {
 	userID, ok := ctx.Locals("user_id").(types.IdType)
 	if !ok || userID == 0 {
@@ -401,6 +436,18 @@ func (c *EventController) RegisterEvent(ctx *fiber.Ctx) error {
 	return ctx.Status(fiber.StatusOK).JSON(event_dto.ToResponse(event))
 }
 
+// UnregisterEvent godoc
+// @Summary Unregister from event
+// @Description Remove authenticated user's registration from the event
+// @Tags events
+// @Produce json
+// @Param id path int true "Event ID" minimum(1)
+// @Success 200 {object} event_dto.EventResponse "Successfully unregistered"
+// @Failure 400 {object} ErrorResponse "Invalid event ID"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "Event or registration not found"
+// @Security BearerAuth
+// @Router /api/v1/events/{id}/register [delete]
 func (c *EventController) UnregisterEvent(ctx *fiber.Ctx) error {
 	userID, ok := ctx.Locals("user_id").(types.IdType)
 	if !ok || userID == 0 {
@@ -421,16 +468,16 @@ func (c *EventController) UnregisterEvent(ctx *fiber.Ctx) error {
 }
 
 // FinishEvent godoc
-//
 // @Summary Finish event
-// @Description Mark event as finished (only creator)
+// @Description Mark event as finished. Only the creator can finish their event.
 // @Tags events
 // @Produce json
-// @Param id path int true "Event ID"
-// @Success 200 {object} event_dto.EventResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 403 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
+// @Param id path int true "Event ID" minimum(1)
+// @Success 200 {object} event_dto.EventResponse "Event marked as finished"
+// @Failure 400 {object} ErrorResponse "Invalid event ID"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden: not the event creator"
+// @Failure 404 {object} ErrorResponse "Event not found"
 // @Security BearerAuth
 // @Router /api/v1/events/{id}/finish [post]
 func (c *EventController) FinishEvent(ctx *fiber.Ctx) error {
@@ -451,6 +498,20 @@ func (c *EventController) FinishEvent(ctx *fiber.Ctx) error {
 	return ctx.Status(fiber.StatusOK).JSON(event_dto.ToResponse(event))
 }
 
+// CreateComment godoc
+// @Summary Add comment to event
+// @Description Add a new comment to the event by authenticated user
+// @Tags events
+// @Accept json
+// @Produce json
+// @Param id path int true "Event ID" minimum(1)
+// @Param request body event_dto.CreateCommentRequest true "Comment text"
+// @Success 201 {object} event_dto.CommentResponse "Comment created successfully"
+// @Failure 400 {object} ErrorResponse "Invalid request or validation failed"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "Event not found"
+// @Security BearerAuth
+// @Router /api/v1/events/{id}/comments [post]
 func (c *EventController) CreateComment(ctx *fiber.Ctx) error {
 	userID, ok := ctx.Locals("user_id").(types.IdType)
 	if !ok || userID == 0 {
@@ -530,22 +591,43 @@ func (c *EventController) handleServiceError(ctx *fiber.Ctx, err error, operatio
 	}
 }
 
-// ErrorResponse стандартный формат ошибки
+// ErrorResponse
+// @Description Standard error response format
 type ErrorResponse struct {
-	Error   string            `json:"error"`
-	Code    int               `json:"code"`
+	// Human-readable error message
+	// @example "event not found"
+	Error string `json:"error"`
+	// HTTP status code
+	// @example 404
+	Code int `json:"code"`
+	// Detailed validation errors (if applicable)
+	// @example {"title": "min length is 3"}
 	Details map[string]string `json:"details,omitempty"`
 }
 
-// ListResponse формат ответа со списком
+// ListResponse
+// @Description Paginated list of events
 type ListResponse struct {
+	// List of events
 	Events []*event_dto.EventResponse `json:"events"`
-	Count  int                        `json:"count"`
-	Limit  int                        `json:"limit"`
-	Offset int                        `json:"offset"`
+	// Number of events in current page
+	// @example 20
+	Count int `json:"count"`
+	// Requested page size
+	// @example 20
+	Limit int `json:"limit"`
+	// Requested offset
+	// @example 0
+	Offset int `json:"offset"`
 }
 
+// EventImageResponse
+// @Description Response after successful image upload
 type EventImageResponse struct {
+	// Unique image identifier in storage
+	// @example "img_abc123xyz"
 	ImageID string `json:"image_id"`
-	URL     string `json:"url"`
+	// URL to retrieve the image file
+	// @example "/api/v1/events/images/img_abc123xyz/file"
+	URL string `json:"url"`
 }

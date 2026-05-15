@@ -53,14 +53,13 @@ func (c *UserController) RegisterRoutes(app *fiber.App, rout string, authMiddlew
 }
 
 // HealthCheck godoc
-//
-//	@Summary		Check health
-//	@Description	Checks health of the server.
-//	@Tags			health
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	user_dto.HealthCheckResponse
-//	@Router			/health [get]
+// @Summary Health check endpoint
+// @Description Returns service health status. Public endpoint.
+// @Tags health
+// @Accept json
+// @Produce json
+// @Success 200 {object} user_dto.HealthCheckResponse "Service is healthy"
+// @Router /health [get]
 func (controller *UserController) HealthCheck(c *fiber.Ctx) error {
 	var response user_dto.HealthCheckResponse
 
@@ -76,16 +75,16 @@ func (controller *UserController) HealthCheck(c *fiber.Ctx) error {
 // =====================================================
 
 // GetMe godoc
-//
-//	@Summary		Get current user profile
-//	@Description	Returns profile of authenticated user
-//	@Tags			users
-//	@Produce		json
-//	@Success		200	{object}	user_dto.UserResponse
-//	@Failure		401	{object}	ErrorResponse
-//	@Failure		404	{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/users/me [get]
+// @Summary Get my profile
+// @Description Returns profile of the authenticated user
+// @Tags users
+// @Produce json
+// @Success 200 {object} user_dto.UserResponse "Profile retrieved successfully"
+// @Failure 401 {object} ErrorResponse "Unauthorized: invalid or missing token"
+// @Failure 404 {object} ErrorResponse "User not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/users/me [get]
 func (c *UserController) GetMe(ctx *fiber.Ctx) error {
 	// ID берём из контекста (устанавливается authMiddleware)
 	userID, ok := ctx.Locals("user_id").(types.IdType)
@@ -111,19 +110,20 @@ func (c *UserController) GetMe(ctx *fiber.Ctx) error {
 }
 
 // UpdateMe godoc
-//
-//	@Summary		Update my profile
-//	@Description	Update authenticated user's profile
-//	@Tags			users
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body	user_dto.UpdateUserRequest	true	"Profile update"
-//	@Success		200		{object}	user_dto.UserResponse
-//	@Failure		400		{object}	ErrorResponse
-//	@Failure		401		{object}	ErrorResponse
-//	@Failure		409		{object}	ErrorResponse	"Email exists"
-//	@Security		BearerAuth
-//	@Router			/api/v1/users/me [put]
+// @Summary Update my profile
+// @Description Update authenticated user's profile. Email and role cannot be changed via this endpoint.
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param request body user_dto.UpdateUserRequest true "Profile fields to update (all optional)"
+// @Success 200 {object} user_dto.UserResponse "Profile updated successfully"
+// @Failure 400 {object} ErrorResponse "Invalid request body or validation failed"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden: email/role change not allowed via this endpoint"
+// @Failure 409 {object} ErrorResponse "Conflict: email already exists"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/users/me [put]
 func (c *UserController) UpdateMe(ctx *fiber.Ctx) error {
 	userID, ok := ctx.Locals("user_id").(types.IdType)
 	if !ok {
@@ -167,6 +167,18 @@ func (c *UserController) UpdateMe(ctx *fiber.Ctx) error {
 }
 
 // UpdateAvatar godoc
+// @Summary Update my avatar
+// @Description Upload new avatar image for authenticated user. Accepts multipart/form-data.
+// @Tags users
+// @Accept multipart/form-data
+// @Produce json
+// @Param avatar formData file true "Avatar image file (JPEG, PNG, WebP)"
+// @Success 200 {object} user_dto.UserResponse "Avatar updated successfully"
+// @Failure 400 {object} ErrorResponse "Invalid file or not an image"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 500 {object} ErrorResponse "File storage error"
+// @Security BearerAuth
+// @Router /api/v1/users/me/avatar [put]
 func (c *UserController) UpdateAvatar(ctx *fiber.Ctx) error {
 	userID, ok := ctx.Locals("user_id").(types.IdType)
 	if !ok {
@@ -199,6 +211,16 @@ func (c *UserController) UpdateAvatar(ctx *fiber.Ctx) error {
 }
 
 // DeleteAvatar godoc
+// @Summary Delete my avatar
+// @Description Remove avatar from authenticated user's profile
+// @Tags users
+// @Produce json
+// @Success 200 {object} user_dto.UserResponse "Avatar deleted successfully"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "Avatar not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/users/me/avatar [delete]
 func (c *UserController) DeleteAvatar(ctx *fiber.Ctx) error {
 	userID, ok := ctx.Locals("user_id").(types.IdType)
 	if !ok {
@@ -214,6 +236,18 @@ func (c *UserController) DeleteAvatar(ctx *fiber.Ctx) error {
 }
 
 // GetAvatar godoc
+// @Summary Get avatar as data URL
+// @Description Returns avatar of specified user as base64 data URL. Requires authentication.
+// @Tags users
+// @Produce json
+// @Param id path uint true "User ID" minimum(1)
+// @Success 200 {object} AvatarResponse "Avatar data URL"
+// @Failure 400 {object} ErrorResponse "Invalid user ID"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "User or avatar not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/users/{id}/avatar [get]
 func (c *UserController) GetAvatar(ctx *fiber.Ctx) error {
 	id, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
 	if err != nil {
@@ -252,6 +286,17 @@ func (c *UserController) GetAvatar(ctx *fiber.Ctx) error {
 	return ctx.Status(http.StatusOK).JSON(AvatarResponse{DataURL: dataURL, URL: avatarURL})
 }
 
+// GetAvatarFile godoc
+// @Summary Get avatar as raw file
+// @Description Download avatar image file directly. Public endpoint (no auth required).
+// @Tags users
+// @Produce octet-stream
+// @Param id path uint true "User ID" minimum(1)
+// @Success 200 {file} binary "Avatar image file"
+// @Failure 400 {object} ErrorResponse "Invalid user ID"
+// @Failure 404 {object} ErrorResponse "User or avatar not found"
+// @Failure 500 {object} ErrorResponse "File read error"
+// @Router /api/v1/users/{id}/avatar/file [get]
 func (c *UserController) GetAvatarFile(ctx *fiber.Ctx) error {
 	id, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
 	if err != nil {
@@ -278,17 +323,18 @@ func (c *UserController) GetAvatarFile(ctx *fiber.Ctx) error {
 // =====================================================
 
 // GetByID godoc
-//
-//	@Summary		Get user by ID
-//	@Description	Returns user details (public fields only)
-//	@Tags			users
-//	@Produce		json
-//	@Param			id	path	uint	true	"User ID"
-//	@Success		200	{object}	user_dto.UserResponse
-//	@Failure		400	{object}	ErrorResponse
-//	@Failure		404	{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/users/{id} [get]
+// @Summary Get user by ID
+// @Description Returns public profile information of specified user
+// @Tags users
+// @Produce json
+// @Param id path uint true "User ID" minimum(1)
+// @Success 200 {object} user_dto.UserResponse "User profile retrieved"
+// @Failure 400 {object} ErrorResponse "Invalid user ID format"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 404 {object} ErrorResponse "User not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/users/{id} [get]
 func (c *UserController) GetByID(ctx *fiber.Ctx) error {
 	id, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
 	idType := types.IdType(id)
@@ -318,20 +364,22 @@ func (c *UserController) GetByID(ctx *fiber.Ctx) error {
 }
 
 // Update godoc
-//
-//	@Summary		Update user (admin)
-//	@Description	Update any user's profile (moderator+ only)
-//	@Tags			users-admin
-//	@Accept			json
-//	@Produce		json
-//	@Param			id		path	uint						true	"User ID"
-//	@Param			request	body	user_dto.UpdateUserRequest	true	"Update data"
-//	@Success		200		{object}	user_dto.UserResponse
-//	@Failure		400		{object}	ErrorResponse
-//	@Failure		403		{object}	ErrorResponse	"Forbidden"
-//	@Failure		404		{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/users/{id} [put]
+// @Summary Update user profile (admin)
+// @Description Update any user's profile. Requires moderator role. All fields optional.
+// @Tags users-admin
+// @Accept json
+// @Produce json
+// @Param id path uint true "User ID" minimum(1)
+// @Param request body user_dto.UpdateUserRequest true "Fields to update (all optional)"
+// @Success 200 {object} user_dto.UserResponse "Profile updated successfully"
+// @Failure 400 {object} ErrorResponse "Invalid request or validation failed"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden: moderators only"
+// @Failure 404 {object} ErrorResponse "User not found"
+// @Failure 409 {object} ErrorResponse "Conflict: email already exists"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/users/{id} [put]
 func (c *UserController) Update(ctx *fiber.Ctx) error {
 	// Проверка прав: только модераторы
 	role, ok := ctx.Locals("user_role").(string)
@@ -377,18 +425,19 @@ func (c *UserController) Update(ctx *fiber.Ctx) error {
 }
 
 // Delete godoc
-//
-//	@Summary		Delete user (admin)
-//	@Description	Permanently delete user (moderator+ only)
-//	@Tags			users-admin
-//	@Produce		json
-//	@Param			id	path	uint	true	"User ID"
-//	@Success		204	"Deleted"
-//	@Failure		400	{object}	ErrorResponse
-//	@Failure		403	{object}	ErrorResponse
-//	@Failure		404	{object}	ErrorResponse
-//	@Security		BearerAuth
-//	@Router			/api/v1/users/{id} [delete]
+// @Summary Delete user (admin)
+// @Description Permanently delete user account. Requires moderator role.
+// @Tags users-admin
+// @Produce json
+// @Param id path uint true "User ID" minimum(1)
+// @Success 204 "User deleted successfully (no content)"
+// @Failure 400 {object} ErrorResponse "Invalid user ID"
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Failure 403 {object} ErrorResponse "Forbidden: moderators only"
+// @Failure 404 {object} ErrorResponse "User not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/users/{id} [delete]
 func (c *UserController) Delete(ctx *fiber.Ctx) error {
 	role, ok := ctx.Locals("user_role").(string)
 	if !ok || role != "moderator" {
@@ -462,16 +511,29 @@ func (c *UserController) handleServiceError(ctx *fiber.Ctx, err error, operation
 	}
 }
 
-// ErrorResponse стандартный формат ошибки
+// ErrorResponse
+// @Description Standard error response format
 type ErrorResponse struct {
-	Error   string            `json:"error"`
-	Code    int               `json:"code"`
+	// Human-readable error message
+	// @example "user not found"
+	Error string `json:"error"`
+	// HTTP status code
+	// @example 404
+	Code int `json:"code"`
+	// Detailed validation errors (if applicable)
+	// @example {"email": "must be valid email", "name": "is required"}
 	Details map[string]string `json:"details,omitempty"`
 }
 
+// AvatarResponse
+// @Description Response containing avatar data (for GetAvatar endpoint)
 type AvatarResponse struct {
+	// Avatar as data URL (base64-encoded, for inline display)
+	// @example "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
 	DataURL string `json:"data_url,omitempty"`
-	URL     string `json:"url,omitempty"`
+	// Direct URL to fetch avatar file
+	// @example "/api/v1/users/12345/avatar/file"
+	URL string `json:"url,omitempty"`
 }
 
 // formatValidationErrors форматирует ошибки validator
