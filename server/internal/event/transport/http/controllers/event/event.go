@@ -55,6 +55,7 @@ func (c *EventController) RegisterRoutes(app *fiber.App, rout string, authMiddle
 	app.Post(rout+"/image", *authMiddleware, c.UploadImage)
 	app.Put(rout+"/:id", *authMiddleware, c.UpdateEvent)
 	app.Delete(rout+"/:id", *authMiddleware, c.DeleteEvent)
+	app.Post(rout+"/:id/finish", *authMiddleware, c.FinishEvent)
 	app.Post(rout+"/:id/register", *authMiddleware, c.RegisterEvent)
 	app.Delete(rout+"/:id/register", *authMiddleware, c.UnregisterEvent)
 }
@@ -398,6 +399,37 @@ func (c *EventController) UnregisterEvent(ctx *fiber.Ctx) error {
 	event, err := c.eventService.Unregister(ctx.UserContext(), types.IdType(idParam), userID)
 	if err != nil {
 		return c.handleServiceError(ctx, err, "unregister event")
+	}
+
+	return ctx.Status(fiber.StatusOK).JSON(event_dto.ToResponse(event))
+}
+
+// FinishEvent godoc
+//
+// @Summary Finish event
+// @Description Mark event as finished (only creator)
+// @Tags events
+// @Produce json
+// @Param id path int true "Event ID"
+// @Success 200 {object} event_dto.EventResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Security BearerAuth
+// @Router /api/v1/events/{id}/finish [post]
+func (c *EventController) FinishEvent(ctx *fiber.Ctx) error {
+	creatorID, _ := ctx.Locals("user_id").(types.IdType)
+	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error: "invalid event ID", Code: fiber.StatusBadRequest,
+		})
+	}
+
+	event, err := c.eventService.Finish(ctx.UserContext(), types.IdType(idParam), creatorID)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "finish event")
 	}
 
 	return ctx.Status(fiber.StatusOK).JSON(event_dto.ToResponse(event))

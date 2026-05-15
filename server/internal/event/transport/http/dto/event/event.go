@@ -20,6 +20,7 @@ type EventResponse struct {
 	CreatorID   types.IdType `json:"creator_id"`
 	Tags        []string     `json:"tags"`
 	Attendees   []string     `json:"attendees"`
+	Finished    bool         `json:"finished"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
@@ -35,6 +36,7 @@ func ToResponse(e *models.Event) *EventResponse {
 		CreatorID:   e.CreatorID,
 		Tags:        append([]string(nil), e.Tags...),
 		Attendees:   idSliceToStrings(e.Attendees),
+		Finished:    e.Finished,
 		CreatedAt:   e.CreatedAt,
 		UpdatedAt:   e.UpdatedAt,
 	}

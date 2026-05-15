@@ -183,8 +183,9 @@ func (r *EventRepo) Update(ctx context.Context, event *models.Event) error {
 			event_date = $3,
 			location = $4,
 			image_id = $5,
+			finished = $6,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $6
+		WHERE id = $7
 		RETURNING updated_at
 	`
 	err = tx.QueryRowContext(ctx, query,
@@ -193,6 +194,7 @@ func (r *EventRepo) Update(ctx context.Context, event *models.Event) error {
 		event.EventDate,
 		event.Location,
 		event.ImageID,
+		event.Finished,
 		event.ID,
 	).Scan(&event.UpdatedAt)
 	if err != nil {
@@ -219,6 +221,22 @@ func (r *EventRepo) Update(ctx context.Context, event *models.Event) error {
 
 func (r *EventRepo) Delete(ctx context.Context, id types.IdType) error {
 	res, err := r.db.ExecContext(ctx, "DELETE FROM events WHERE id = $1", id)
+	if err != nil {
+		return fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("%w: event %d", domain_errors.ErrNotFound, id)
+	}
+	return nil
+}
+
+// SetFinished устанавливает признак finished у события
+func (r *EventRepo) SetFinished(ctx context.Context, id types.IdType, finished bool) error {
+	res, err := r.db.ExecContext(ctx, "UPDATE events SET finished = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2", finished, id)
 	if err != nil {
 		return fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
 	}
@@ -295,6 +313,7 @@ func (r *EventRepo) queryEvents(ctx context.Context, whereClause string, orderCl
 			e.location,
 			e.image_id,
 			e.creator_id,
+			e.finished,
 			e.created_at,
 			e.updated_at,
 			COALESCE(array_agg(DISTINCT et.tag) FILTER (WHERE et.tag IS NOT NULL), '{}') AS tags,
@@ -326,6 +345,7 @@ func (r *EventRepo) queryEvents(ctx context.Context, whereClause string, orderCl
 			&event.Location,
 			&event.ImageID,
 			&event.CreatorID,
+			&event.Finished,
 			&event.CreatedAt,
 			&event.UpdatedAt,
 			pq.Array(&tags),

@@ -231,6 +231,27 @@ func (s *EventService) Unregister(ctx context.Context, eventID, userID types.IdT
 	return s.eventRepo.GetByID(ctx, eventID)
 }
 
+// Finish помечает событие как завершённое (только создатель может выполнить)
+func (s *EventService) Finish(ctx context.Context, id types.IdType, creatorID types.IdType) (*models.Event, error) {
+	existing, err := s.eventRepo.GetByID(ctx, id)
+	if err != nil {
+		if strings.Contains(err.Error(), domain_errors.ErrNotFound.Error()) {
+			return nil, fmt.Errorf("%w: event %d", domain_errors.ErrEventNotFound, id)
+		}
+		return nil, err
+	}
+
+	if existing.CreatorID != creatorID {
+		return nil, fmt.Errorf("%w: you can only finish your own events", domain_errors.ErrForbidden)
+	}
+
+	if err := s.eventRepo.SetFinished(ctx, id, true); err != nil {
+		return nil, err
+	}
+
+	return s.eventRepo.GetByID(ctx, id)
+}
+
 // =====================================================
 // VALIDATION FUNCTIONS
 // =====================================================

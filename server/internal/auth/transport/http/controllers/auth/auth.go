@@ -26,6 +26,8 @@ func NewAuthController(authService *auth_service.AuthService, logger *slog.Logge
 
 func (ac *AuthController) RegisterRoutes(basicRouter fiber.Router, authMiddleware fiber.Handler) {
 	basicRouter.Post("/register", ac.register)
+	// moderator-only registration for creating moderator accounts
+	basicRouter.Post("/register/moderator", authMiddleware, ac.registerModerator)
 	basicRouter.Post("/login", ac.login)
 	basicRouter.Post("/refresh", authMiddleware, ac.refreshToken)
 }
@@ -62,7 +64,8 @@ func (ac *AuthController) register(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid request"})
 	}
 
-	tokenPair, err := ac.authService.Register(req.City, req.Name, req.Email, req.Password, req.Role)
+	// Public registration must always create regular users
+	tokenPair, err := ac.authService.Register(req.City, req.Name, req.Email, req.Password, "user")
 	if err != nil {
 		if errors.Is(err, domain_errors.ErrEmailAlreadyExists) {
 			ac.logger.Info("registration failed: email already exists", slog.String("email", req.Email))
@@ -78,6 +81,61 @@ func (ac *AuthController) register(c *fiber.Ctx) error {
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.ExpiresAt.String(),
 	})
+}
+
+// registerModerator allows an existing moderator to create a new moderator account by email
+func (ac *AuthController) registerModerator(c *fiber.Ctx) error {
+	// check current user's role
+	roleRaw := c.Locals("role")
+	role, _ := roleRaw.(string)
+	if role != "moderator" {
+		return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "moderators only"})
+	}
+
+	var req auth_dto.RegisterRequest
+	if err := c.BodyParser(&req); err != nil {
+		ac.logger.Warn("failed to parse register moderator request", slog.Any("error", err))
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid request"})
+	}
+
+	// require email and name and password
+	if req.Email == "" || req.Name == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "email and name are required"})
+	}
+
+	// if no password provided, generate a random one
+	password := req.Password
+	if password == "" {
+		password = generateRandomPassword(12)
+	}
+
+	tokenPair, err := ac.authService.Register(req.City, req.Name, req.Email, password, "moderator")
+	if err != nil {
+		if errors.Is(err, domain_errors.ErrEmailAlreadyExists) {
+			ac.logger.Info("moderator creation failed: email already exists", slog.String("email", req.Email))
+			return c.Status(http.StatusConflict).JSON(fiber.Map{"error": "email already registered"})
+		}
+		ac.logger.Error("moderator creation error", slog.Any("error", err), slog.String("email", req.Email))
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
+	}
+
+	// return token pair and plaintext password when generated so caller can communicate it
+	return c.Status(http.StatusCreated).JSON(fiber.Map{
+		"access_token":  tokenPair.AccessToken,
+		"refresh_token": tokenPair.RefreshToken,
+		"expires_at":    tokenPair.ExpiresAt.String(),
+		"password":      password,
+	})
+}
+
+// generateRandomPassword returns a random alphanumeric password of given length
+func generateRandomPassword(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[int64(i*1103515245+12345)%int64(len(letters))] // deterministic fallback
+	}
+	return string(b)
 }
 
 func (ac *AuthController) refreshToken(c *fiber.Ctx) error {

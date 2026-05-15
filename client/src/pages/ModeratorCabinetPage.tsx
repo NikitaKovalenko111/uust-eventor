@@ -14,6 +14,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { logout } from '../redux/slices/authSlice';
 import { updateAvatarRequest, updateProfileRequest } from '../redux/slices/profileSlice';
+import { registerModeratorApi } from '../api/api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ModeratorCabinet'>;
 
@@ -27,6 +28,11 @@ export const ModeratorCabinetPage = ({ navigation }: Props) => {
   const [about, setAbout] = useState('');
   const [faculty, setFaculty] = useState('');
   const [course, setCourse] = useState('');
+  const [newModName, setNewModName] = useState('');
+  const [newModEmail, setNewModEmail] = useState('');
+  const [newModPassword, setNewModPassword] = useState('');
+  const [creatingModerator, setCreatingModerator] = useState(false);
+  const [showModeratorForm, setShowModeratorForm] = useState(false);
 
   useEffect(() => {
     if (!profile) {
@@ -81,6 +87,42 @@ export const ModeratorCabinetPage = ({ navigation }: Props) => {
             title="Обновить профиль"
             onPress={() => dispatch(updateProfileRequest({ name, city, about, faculty, course }))}
           />
+          <View style={{ height: 1, backgroundColor: theme.colors.border, marginVertical: theme.spacing.sm }} />
+
+          {!showModeratorForm ? (
+            <PrimaryButton title="Добавить модератора" type="outline" onPress={() => setShowModeratorForm(true)} />
+          ) : (
+            <>
+              <Text style={{ fontWeight: '700', marginBottom: 6 }}>Создать модератора</Text>
+              <FormInput label="Имя модератора" value={newModName} onChangeText={setNewModName} />
+              <FormInput label="Почта модератора" value={newModEmail} onChangeText={setNewModEmail} autoCapitalize="none" keyboardType="email-address" />
+              <FormInput label="Пароль (необязательно)" value={newModPassword} onChangeText={setNewModPassword} secureTextEntry />
+              <PrimaryButton
+                title="Создать модератора"
+                onPress={async () => {
+                  if (!newModName || !newModEmail) {
+                    Alert.alert('Ошибка', 'Введите имя и почту модератора');
+                    return;
+                  }
+                  setCreatingModerator(true);
+                  try {
+                    const resp = await registerModeratorApi({ name: newModName, city: city || profile.city, email: newModEmail, password: newModPassword || undefined });
+                    Alert.alert('Успех', `Модератор создан${resp.password ? `, пароль: ${resp.password}` : ''}`);
+                    setNewModName('');
+                    setNewModEmail('');
+                    setNewModPassword('');
+                    setShowModeratorForm(false);
+                  } catch (err: any) {
+                    Alert.alert('Ошибка', err?.message ?? 'Не удалось создать модератора');
+                  } finally {
+                    setCreatingModerator(false);
+                  }
+                }}
+                loading={creatingModerator}
+              />
+              <PrimaryButton title="Отмена" type="outline" onPress={() => setShowModeratorForm(false)} />
+            </>
+          )}
         </View>
       </AnimatedEntry>
 

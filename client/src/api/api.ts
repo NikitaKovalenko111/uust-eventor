@@ -38,6 +38,7 @@ type ServerEventResponse = {
   tags: string[];
   created_at: string;
   updated_at: string;
+  finished?: boolean;
 };
 
 type ServerEventImageResponse = {
@@ -166,6 +167,7 @@ const serverEventToClient = (eventItem: ServerEventResponse): EventItem => ({
   attendees: (eventItem.attendees ?? []).map(String),
   creatorId: String(eventItem.creator_id),
   shortDescription: buildShortDescription(eventItem.description),
+  finished: Boolean(eventItem.finished),
 });
 
 const buildShortDescription = (description: string) => {
@@ -217,6 +219,15 @@ export const registerApi = async (payload: RegisterPayload): Promise<AuthRespons
     return response.data;
   } catch (error) {
     throw toApiError(error, 'Ошибка регистрации');
+  }
+};
+
+export const registerModeratorApi = async (payload: { name: string; city: string; email: string; password?: string }): Promise<any> => {
+  try {
+    const response = await apiClient.post<any>('/api/v1/auth/register/moderator', payload);
+    return response.data;
+  } catch (error) {
+    throw toApiError(error, 'Ошибка создания модератора');
   }
 };
 
@@ -347,9 +358,10 @@ export const deleteAvatarApi = async (): Promise<User> => {
   }
 };
 
-export const fetchEventsApi = async (search = ''): Promise<EventItem[]> => {
+export const fetchEventsApi = async (search = '', limit = 20, offset = 0): Promise<EventItem[]> => {
   try {
-    const params = search.trim() ? { search: search.trim() } : undefined;
+    const params: any = { limit, offset };
+    if (search.trim()) params.search = search.trim();
     const response = await apiClient.get<ServerEventsResponse>('/api/v1/events', { params });
     return response.data.events.map(serverEventToClient);
   } catch (error) {
@@ -378,6 +390,22 @@ export const createEventApi = async (payload: CreateEventPayload): Promise<void>
     await apiClient.post('/api/v1/events', buildEventPayload(payload));
   } catch (error) {
     throw toApiError(error, 'Не удалось создать мероприятие');
+  }
+};
+
+export const deleteEventApi = async (eventId: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/api/v1/events/${eventId}`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось удалить мероприятие');
+  }
+};
+
+export const finishEventApi = async (eventId: string): Promise<void> => {
+  try {
+    await apiClient.post(`/api/v1/events/${eventId}/finish`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось завершить мероприятие');
   }
 };
 

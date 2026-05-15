@@ -10,7 +10,7 @@ import { ScreenContainer } from '../components/ScreenContainer';
 import { theme } from '../constants/theme';
 import { uploadEventImageApi } from '../api/api';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
-import { createEventRequest, fetchEventsRequest, registerForEventRequest, setSearchText } from '../redux/slices/eventsSlice';
+import { createEventRequest, fetchEventsRequest, registerForEventRequest, setSearchText, setPage } from '../redux/slices/eventsSlice';
 import { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Events'>;
@@ -18,6 +18,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Events'>;
 export const EventsPage = ({ navigation }: Props) => {
   const dispatch = useAppDispatch();
   const { list, searchText } = useAppSelector((state) => state.events);
+  const limit = useAppSelector((state) => state.events.limit);
+  const offset = useAppSelector((state) => state.events.offset);
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
   const userRole = useAppSelector((state) => state.auth.user?.role);
   const userId = useAppSelector((state) => state.auth.user?.id ?? '');
@@ -35,6 +37,11 @@ export const EventsPage = ({ navigation }: Props) => {
   useEffect(() => {
     dispatch(fetchEventsRequest());
   }, [dispatch]);
+
+  useEffect(() => {
+    // refetch when page or limit changes
+    dispatch(fetchEventsRequest());
+  }, [dispatch, offset, limit]);
 
   const pickEventCover = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -95,7 +102,6 @@ export const EventsPage = ({ navigation }: Props) => {
     <ScreenContainer>
       <AppHeader
         title="Мероприятия"
-        subtitle="Поиск по всем полям"
         onActionPress={() => {
           if (!isAuthenticated) {
             navigation.navigate('Auth');
@@ -141,6 +147,7 @@ export const EventsPage = ({ navigation }: Props) => {
           value={searchText}
           onChangeText={(value) => {
             dispatch(setSearchText(value));
+            dispatch(setPage({ offset: 0 }));
             dispatch(fetchEventsRequest());
           }}
           placeholder="Название, описание, место, теги"
@@ -162,6 +169,34 @@ export const EventsPage = ({ navigation }: Props) => {
           }
         />
       ))}
+
+      {(offset > 0 || list.length >= limit) ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: theme.spacing.md }}>
+          <PrimaryButton
+            title="Предыдущая"
+            type="outline"
+            onPress={() => {
+              const newOffset = Math.max(0, offset - limit);
+              dispatch(setPage({ offset: newOffset }));
+              dispatch(fetchEventsRequest());
+            }}
+            disabled={offset === 0}
+          />
+
+          <Text style={{ alignSelf: 'center' }}>Стр. {Math.floor(offset / limit) + 1}</Text>
+
+          <PrimaryButton
+            title="Далее"
+            type="outline"
+            onPress={() => {
+              const newOffset = offset + limit;
+              dispatch(setPage({ offset: newOffset }));
+              dispatch(fetchEventsRequest());
+            }}
+            disabled={list.length < limit}
+          />
+        </View>
+      ) : null}
     </ScreenContainer>
   );
 };

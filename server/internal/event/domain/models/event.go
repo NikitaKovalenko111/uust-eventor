@@ -17,6 +17,7 @@ type Event struct {
 	CreatorID   types.IdType   `json:"creator_id"`
 	Tags        []string       `json:"tags"`
 	Attendees   []types.IdType `json:"attendees"`
+	Finished    bool           `json:"finished"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 }

@@ -22,14 +22,14 @@ export const AuthPage = ({ navigation }: Props) => {
   const [city, setCity] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('user');
+  
 
   const onSubmit = () => {
     if (mode === 'login') {
       dispatch(loginRequest({ email, password }));
       return;
     }
-    dispatch(registerRequest({ name, city, email, password, role }));
+    dispatch(registerRequest({ name, city, email, password }));
   };
 
   return (
@@ -55,19 +55,7 @@ export const AuthPage = ({ navigation }: Props) => {
           <FormInput label="Почта" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="email@example.com" />
           <FormInput label="Пароль" value={password} onChangeText={setPassword} secureTextEntry />
 
-          {mode === 'register' ? (
-            <View style={styles.roleRow}>
-              <Pressable style={[styles.roleButton, role === 'user' && styles.roleButtonActive]} onPress={() => setRole('user')}>
-                <Text style={[styles.roleText, role === 'user' && styles.roleTextActive]}>Пользователь</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.roleButton, role === 'moderator' && styles.roleButtonActive]}
-                onPress={() => setRole('moderator')}
-              >
-                <Text style={[styles.roleText, role === 'moderator' && styles.roleTextActive]}>Модератор</Text>
-              </Pressable>
-            </View>
-          ) : null}
+          {/* role selection removed: registrations always create regular users */}
 
           {auth.error ? <Text style={styles.error}>{auth.error}</Text> : null}
 

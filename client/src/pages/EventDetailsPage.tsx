@@ -1,12 +1,12 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View, Alert } from 'react-native';
 import { AppHeader } from '../components/AppHeader';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/types';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
-import { registerForEventRequest } from '../redux/slices/eventsSlice';
+import { registerForEventRequest, deleteEventRequest, finishEventRequest } from '../redux/slices/eventsSlice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EventDetails'>;
 
@@ -64,6 +64,43 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
             dispatch(registerForEventRequest(eventItem.id));
           }}
         />
+      ) : null}
+
+      {isOwnEvent ? (
+        <View style={{ marginTop: 12, gap: 8 }}>
+          {!eventItem.finished ? (
+            <PrimaryButton
+              title="Завершить мероприятие"
+              type="outline"
+              onPress={() => {
+                Alert.alert('Подтвердите', 'Вы уверены, что хотите завершить мероприятие?', [
+                  { text: 'Отмена', style: 'cancel' },
+                  { text: 'Да', onPress: () => dispatch(finishEventRequest(eventItem.id)) },
+                ]);
+              }}
+            />
+          ) : (
+            <Text style={{ color: theme.colors.muted }}>Мероприятие завершено</Text>
+          )}
+
+          <PrimaryButton
+            title="Удалить мероприятие"
+            type="outline"
+            onPress={() => {
+              Alert.alert('Подтвердите', 'Вы действительно хотите удалить мероприятие?', [
+                { text: 'Отмена', style: 'cancel' },
+                {
+                  text: 'Удалить',
+                  style: 'destructive',
+                  onPress: () => {
+                    dispatch(deleteEventRequest(eventItem.id));
+                    navigation.goBack();
+                  },
+                },
+              ]);
+            }}
+          />
+        </View>
       ) : null}
 
       <View style={styles.discussionBlock}>

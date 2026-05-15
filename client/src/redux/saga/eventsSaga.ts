@@ -1,6 +1,6 @@
 import { PayloadAction } from '@reduxjs/toolkit';
 import { call, debounce, put, select, takeLatest } from 'redux-saga/effects';
-import { createEventApi, fetchEventsApi, registerToEventApi, unregisterFromEventApi } from '../../api/api';
+import { createEventApi, fetchEventsApi, registerToEventApi, unregisterFromEventApi, deleteEventApi, finishEventApi } from '../../api/api';
 import { CreateEventPayload, EventItem } from '../../types/models';
 import type { RootState } from '../../redux/store';
 import {
@@ -10,12 +10,16 @@ import {
   fetchEventsRequest,
   fetchEventsSuccess,
   registerForEventRequest,
+  deleteEventRequest,
+  finishEventRequest,
 } from '../slices/eventsSlice';
 
 function* fetchEventsWorker() {
   try {
     const searchText: string = yield select((state: RootState) => state.events.searchText);
-    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText);
+    const limit: number = yield select((state: RootState) => state.events.limit);
+    const offset: number = yield select((state: RootState) => state.events.offset);
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText, limit, offset);
     yield put(fetchEventsSuccess(events));
   } catch (error) {
     yield put(fetchEventsFailure(error instanceof Error ? error.message : 'Ошибка загрузки мероприятий'));
@@ -46,6 +50,28 @@ function* toggleRegistrationWorker(action: PayloadAction<string>) {
   }
 }
 
+function* deleteEventWorker(action: PayloadAction<string>) {
+  try {
+    yield call(deleteEventApi, action.payload);
+    const searchText: string = yield select((state: RootState) => state.events.searchText);
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText);
+    yield put(fetchEventsSuccess(events));
+  } catch (error) {
+    yield put(eventsFailure(error instanceof Error ? error.message : 'Ошибка удаления мероприятия'));
+  }
+}
+
+function* finishEventWorker(action: PayloadAction<string>) {
+  try {
+    yield call(finishEventApi, action.payload);
+    const searchText: string = yield select((state: RootState) => state.events.searchText);
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText);
+    yield put(fetchEventsSuccess(events));
+  } catch (error) {
+    yield put(eventsFailure(error instanceof Error ? error.message : 'Ошибка завершения мероприятия'));
+  }
+}
+
 function* createEventWorker(action: PayloadAction<CreateEventPayload>) {
   try {
     const userId: string | undefined = yield select((state: RootState) => state.auth.user?.id);
@@ -65,4 +91,6 @@ export function* watchEventsSaga() {
   yield debounce(400, fetchEventsRequest.type, fetchEventsWorker);
   yield takeLatest(registerForEventRequest.type, toggleRegistrationWorker);
   yield takeLatest(createEventRequest.type, createEventWorker);
+  yield takeLatest(deleteEventRequest.type, deleteEventWorker);
+  yield takeLatest(finishEventRequest.type, finishEventWorker);
 }

@@ -6,6 +6,8 @@ type EventsState = {
   loading: boolean;
   error: string | null;
   searchText: string;
+  limit: number;
+  offset: number;
 };
 
 const initialState: EventsState = {
@@ -13,6 +15,8 @@ const initialState: EventsState = {
   loading: false,
   error: null,
   searchText: '',
+  limit: 20,
+  offset: 0,
 };
 
 const eventsSlice = createSlice({
@@ -45,12 +49,26 @@ const eventsSlice = createSlice({
       state.loading = true;
       state.error = null;
     },
+    deleteEventRequest(state, _action: PayloadAction<string>) {
+      state.loading = true;
+      state.error = null;
+    },
+    finishEventRequest(state, _action: PayloadAction<string>) {
+      state.loading = true;
+      state.error = null;
+    },
     updateEvents(state, action: PayloadAction<EventItem[]>) {
       state.loading = false;
       state.list = action.payload;
     },
     setSearchText(state, action: PayloadAction<string>) {
       state.searchText = action.payload;
+    },
+    setPage(state, action: PayloadAction<{ offset: number; limit?: number }>) {
+      state.offset = action.payload.offset;
+      if (typeof action.payload.limit === 'number') {
+        state.limit = action.payload.limit;
+      }
     },
     clearFilters(state) {
       state.searchText = '';
@@ -65,6 +83,9 @@ export const {
   eventsFailure,
   registerForEventRequest,
   createEventRequest,
+  deleteEventRequest,
+  finishEventRequest,
+  setPage,
   updateEvents,
   setSearchText,
   clearFilters,

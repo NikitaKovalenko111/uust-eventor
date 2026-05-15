@@ -23,6 +23,7 @@ export type EventItem = {
   imageUri: string;
   attendees: string[];
   creatorId: string;
+  finished?: boolean;
 };
 
 export type AuthPayload = {
@@ -33,7 +34,6 @@ export type AuthPayload = {
 export type RegisterPayload = AuthPayload & {
   name: string;
   city: string;
-  role: UserRole;
 };
 
 export type CreateEventPayload = {
