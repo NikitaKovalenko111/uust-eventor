@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { AuthPayload, CreateEventPayload, EventItem, RegisterPayload, User } from '../types/models';
+import { AuthPayload, CreateCommentPayload, CreateEventPayload, EventComment, EventItem, RegisterPayload, User } from '../types/models';
 
 type AuthResponse = {
   access_token: string;
@@ -39,6 +39,20 @@ type ServerEventResponse = {
   created_at: string;
   updated_at: string;
   finished?: boolean;
+};
+
+type ServerCommentResponse = {
+  id: number;
+  event_id: number;
+  author_id: number;
+  author_name: string;
+  text: string;
+  created_at: string;
+};
+
+type ServerCommentsResponse = {
+  comments: ServerCommentResponse[];
+  count: number;
 };
 
 type ServerEventImageResponse = {
@@ -170,6 +184,15 @@ const serverEventToClient = (eventItem: ServerEventResponse): EventItem => ({
   finished: Boolean(eventItem.finished),
 });
 
+const serverCommentToClient = (commentItem: ServerCommentResponse): EventComment => ({
+  id: String(commentItem.id),
+  eventId: String(commentItem.event_id),
+  authorId: String(commentItem.author_id),
+  authorName: commentItem.author_name,
+  text: commentItem.text,
+  createdAt: commentItem.created_at,
+});
+
 const buildShortDescription = (description: string) => {
   const text = description.trim();
   if (!text) {
@@ -194,6 +217,8 @@ const buildEventImageUri = (eventItem: ServerEventResponse) => {
   }
   return new URL(`/api/v1/events/images/${imageId}/file`, apiBaseUrl).toString();
 };
+
+const buildUserAvatarUri = (userId: string) => new URL(`/api/v1/users/${userId}/avatar/file`, apiBaseUrl).toString();
 
 const buildEventPayload = (payload: CreateEventPayload) => ({
   title: payload.title,
@@ -228,6 +253,24 @@ export const registerModeratorApi = async (payload: { name: string; city: string
     return response.data;
   } catch (error) {
     throw toApiError(error, 'Ошибка создания модератора');
+  }
+};
+
+export const fetchEventCommentsApi = async (eventId: string): Promise<EventComment[]> => {
+  try {
+    const response = await apiClient.get<ServerCommentsResponse>(`/api/v1/events/${eventId}/comments`);
+    return (response.data.comments ?? []).map(serverCommentToClient);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить комментарии');
+  }
+};
+
+export const createEventCommentApi = async (eventId: string, payload: CreateCommentPayload): Promise<EventComment> => {
+  try {
+    const response = await apiClient.post<ServerCommentResponse>(`/api/v1/events/${eventId}/comments`, payload);
+    return serverCommentToClient(response.data);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось отправить комментарий');
   }
 };
 
@@ -348,6 +391,8 @@ export const updateAvatarApi = async (uri: string): Promise<User> => {
     throw toApiError(error, 'Не удалось обновить аватар');
   }
 };
+
+export const buildCommentAvatarUri = (userId: string) => buildUserAvatarUri(userId);
 
 export const deleteAvatarApi = async (): Promise<User> => {
   try {

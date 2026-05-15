@@ -26,6 +26,15 @@ export type EventItem = {
   finished?: boolean;
 };
 
+export type EventComment = {
+  id: string;
+  eventId: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+};
+
 export type AuthPayload = {
   email: string;
   password: string;
@@ -43,4 +52,8 @@ export type CreateEventPayload = {
   location: string;
   tags: string[];
   imageUri: string;
+};
+
+export type CreateCommentPayload = {
+  text: string;
 };

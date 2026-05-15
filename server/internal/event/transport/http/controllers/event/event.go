@@ -47,12 +47,14 @@ func (c *EventController) RegisterRoutes(app *fiber.App, rout string, authMiddle
 
 	publicRouter.Get("", c.ListEvents)
 	publicRouter.Get("/", c.ListEvents)
+	publicRouter.Get("/:id/comments", c.ListComments)
 	publicRouter.Get("/:id", c.GetEvent)
 	publicRouter.Get("/images/:image_id/file", c.GetImageFile)
 
 	app.Post(rout, *authMiddleware, c.CreateEvent)
 	app.Post(rout+"/", *authMiddleware, c.CreateEvent)
 	app.Post(rout+"/image", *authMiddleware, c.UploadImage)
+	app.Post(rout+"/:id/comments", *authMiddleware, c.CreateComment)
 	app.Put(rout+"/:id", *authMiddleware, c.UpdateEvent)
 	app.Delete(rout+"/:id", *authMiddleware, c.DeleteEvent)
 	app.Post(rout+"/:id/finish", *authMiddleware, c.FinishEvent)
@@ -276,6 +278,20 @@ func (c *EventController) ListEvents(ctx *fiber.Ctx) error {
 	})
 }
 
+func (c *EventController) ListComments(ctx *fiber.Ctx) error {
+	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid event ID", Code: fiber.StatusBadRequest})
+	}
+
+	comments, err := c.eventService.ListComments(ctx.UserContext(), types.IdType(idParam))
+	if err != nil {
+		return c.handleServiceError(ctx, err, "list comments")
+	}
+
+	return ctx.Status(fiber.StatusOK).JSON(event_dto.CommentsToListResponse(comments))
+}
+
 // =====================================================
 // UPDATE
 // =====================================================
@@ -433,6 +449,38 @@ func (c *EventController) FinishEvent(ctx *fiber.Ctx) error {
 	}
 
 	return ctx.Status(fiber.StatusOK).JSON(event_dto.ToResponse(event))
+}
+
+func (c *EventController) CreateComment(ctx *fiber.Ctx) error {
+	userID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok || userID == 0 {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: fiber.StatusUnauthorized})
+	}
+
+	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid event ID", Code: fiber.StatusBadRequest})
+	}
+
+	var req event_dto.CreateCommentRequest
+	if err := ctx.BodyParser(&req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid request body", Code: fiber.StatusBadRequest})
+	}
+
+	if err := c.validator.Struct(req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+			Error:   "validation failed",
+			Code:    fiber.StatusBadRequest,
+			Details: http_helpers.FormatValidationErrors(err),
+		})
+	}
+
+	comment, err := c.eventService.AddComment(ctx.UserContext(), types.IdType(idParam), userID, &event_service.CreateCommentRequest{Text: req.Text})
+	if err != nil {
+		return c.handleServiceError(ctx, err, "create comment")
+	}
+
+	return ctx.Status(fiber.StatusCreated).JSON(event_dto.CommentToResponse(comment))
 }
 
 // =====================================================

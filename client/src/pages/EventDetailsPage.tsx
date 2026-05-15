@@ -1,12 +1,17 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Image, StyleSheet, Text, View, Alert } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '../components/AppHeader';
+import { FormInput } from '../components/FormInput';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { ProfileAvatar } from '../components/ProfileAvatar';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { theme } from '../constants/theme';
+import { createEventCommentApi, fetchEventCommentsApi, fetchUserAvatarApi } from '../api/api';
 import { RootStackParamList } from '../navigation/types';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { registerForEventRequest, deleteEventRequest, finishEventRequest } from '../redux/slices/eventsSlice';
+import { EventComment } from '../types/models';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EventDetails'>;
 
@@ -15,6 +20,60 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
   const eventItem = useAppSelector((state) => state.events.list.find((event) => event.id === route.params.eventId));
   const userId = useAppSelector((state) => state.auth.user?.id ?? '');
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+  const [comments, setComments] = useState<EventComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentsError, setCommentsError] = useState('');
+  const [commentText, setCommentText] = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
+  const [commentAvatars, setCommentAvatars] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadComments = async () => {
+      if (!eventItem) {
+        return;
+      }
+
+      setCommentsLoading(true);
+      setCommentsError('');
+
+      try {
+        const loadedComments = await fetchEventCommentsApi(eventItem.id);
+
+        const uniqueAuthorIds = Array.from(new Set(loadedComments.map((item) => item.authorId))).filter(Boolean);
+        const avatarEntries = await Promise.all(
+          uniqueAuthorIds.map(async (authorId) => {
+            try {
+              const avatarUri = await fetchUserAvatarApi(authorId);
+              return [authorId, avatarUri] as const;
+            } catch {
+              return [authorId, ''] as const;
+            }
+          })
+        );
+
+        if (isMounted) {
+          setComments(loadedComments);
+          setCommentAvatars(Object.fromEntries(avatarEntries));
+        }
+      } catch (error) {
+        if (isMounted) {
+          setCommentsError(error instanceof Error ? error.message : 'Не удалось загрузить комментарии');
+        }
+      } finally {
+        if (isMounted) {
+          setCommentsLoading(false);
+        }
+      }
+    };
+
+    void loadComments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [eventItem?.id]);
 
   if (!eventItem) {
     return (
@@ -27,6 +86,45 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
 
   const isRegistered = eventItem.attendees.includes(userId);
   const isOwnEvent = isAuthenticated && eventItem.creatorId === userId;
+
+  const submitComment = async () => {
+    if (!isAuthenticated) {
+      navigation.navigate('Auth');
+      return;
+    }
+
+    const text = commentText.trim();
+    if (!text) {
+      Alert.alert('Комментарий пустой', 'Введите текст комментария');
+      return;
+    }
+
+    setSendingComment(true);
+    try {
+      await createEventCommentApi(eventItem.id, { text });
+      setCommentText('');
+
+      const refreshedComments = await fetchEventCommentsApi(eventItem.id);
+      const uniqueAuthorIds = Array.from(new Set(refreshedComments.map((item) => item.authorId))).filter(Boolean);
+      const avatarEntries = await Promise.all(
+        uniqueAuthorIds.map(async (authorId) => {
+          try {
+            const avatarUri = await fetchUserAvatarApi(authorId);
+            return [authorId, avatarUri] as const;
+          } catch {
+            return [authorId, ''] as const;
+          }
+        })
+      );
+
+      setComments(refreshedComments);
+      setCommentAvatars(Object.fromEntries(avatarEntries));
+    } catch (error) {
+      Alert.alert('Ошибка', error instanceof Error ? error.message : 'Не удалось отправить комментарий');
+    } finally {
+      setSendingComment(false);
+    }
+  };
 
   return (
     <ScreenContainer>
@@ -104,8 +202,41 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
       ) : null}
 
       <View style={styles.discussionBlock}>
-        <Text style={styles.discussionTitle}>Блок обсуждения мероприятия</Text>
-        <Text style={styles.discussionText}>Здесь можно добавить чат, комментарии и вопросы к организаторам.</Text>
+        <Text style={styles.discussionTitle}>Обсуждение мероприятия</Text>
+
+        {isAuthenticated ? (
+          <View style={styles.composer}>
+            <FormInput
+              label="Ваш комментарий"
+              value={commentText}
+              onChangeText={setCommentText}
+              placeholder="Напишите, что думаете о мероприятии"
+              multiline
+              numberOfLines={4}
+              style={styles.commentInput}
+            />
+            <PrimaryButton title="Отправить комментарий" onPress={submitComment} loading={sendingComment} />
+          </View>
+        ) : (
+          <PrimaryButton title="Войти, чтобы оставить комментарий" type="outline" onPress={() => navigation.navigate('Auth')} />
+        )}
+
+        {commentsLoading ? <Text style={styles.commentsHint}>Загрузка комментариев...</Text> : null}
+        {commentsError ? <Text style={styles.commentsError}>{commentsError}</Text> : null}
+        {!commentsLoading && comments.length === 0 ? <Text style={styles.commentsHint}>Пока нет комментариев. Будьте первым.</Text> : null}
+
+        {comments.map((comment) => (
+          <View key={comment.id} style={styles.commentCard}>
+            <ProfileAvatar uri={commentAvatars[comment.authorId] || undefined} size={42} />
+            <View style={styles.commentBody}>
+              <View style={styles.commentHeader}>
+                <Text style={styles.commentAuthor}>{comment.authorName}</Text>
+                <Text style={styles.commentDate}>{new Date(comment.createdAt).toLocaleString('ru-RU', { dateStyle: 'medium', timeStyle: 'short' })}</Text>
+              </View>
+              <Text style={styles.commentText}>{comment.text}</Text>
+            </View>
+          </View>
+        ))}
       </View>
     </ScreenContainer>
   );
@@ -160,6 +291,54 @@ const styles = StyleSheet.create({
   discussionText: {
     color: theme.colors.muted,
     fontSize: 13,
+  },
+  composer: {
+    gap: theme.spacing.sm,
+  },
+  commentInput: {
+    minHeight: 110,
+    height: 110,
+    textAlignVertical: 'top',
+    paddingTop: 12,
+  },
+  commentsHint: {
+    color: theme.colors.muted,
+    fontSize: 13,
+  },
+  commentsError: {
+    color: theme.colors.danger,
+    fontSize: 13,
+  },
+  commentCard: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  commentBody: {
+    flex: 1,
+    gap: 4,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  commentAuthor: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  commentDate: {
+    color: theme.colors.muted,
+    fontSize: 11,
+  },
+  commentText: {
+    color: theme.colors.text,
+    fontSize: 14,
+    lineHeight: 20,
   },
   empty: {
     marginTop: 24,

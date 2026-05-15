@@ -56,6 +56,10 @@ type UpdateEventRequest struct {
 	Tags        *[]string `json:"tags,omitempty"`
 }
 
+type CreateCommentRequest struct {
+	Text string `json:"text"`
+}
+
 // =====================================================
 // CREATE
 // =====================================================
@@ -250,6 +254,54 @@ func (s *EventService) Finish(ctx context.Context, id types.IdType, creatorID ty
 	}
 
 	return s.eventRepo.GetByID(ctx, id)
+}
+
+func (s *EventService) ListComments(ctx context.Context, eventID types.IdType) ([]*models.EventComment, error) {
+	if _, err := s.eventRepo.GetByID(ctx, eventID); err != nil {
+		if strings.Contains(err.Error(), domain_errors.ErrNotFound.Error()) {
+			return nil, fmt.Errorf("%w: event %d", domain_errors.ErrEventNotFound, eventID)
+		}
+		return nil, err
+	}
+
+	comments, err := s.eventRepo.ListComments(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	return comments, nil
+}
+
+func (s *EventService) AddComment(ctx context.Context, eventID, authorID types.IdType, req *CreateCommentRequest) (*models.EventComment, error) {
+	req.Text = strings.TrimSpace(req.Text)
+	if req.Text == "" {
+		return nil, fmt.Errorf("%w: comment text is required", domain_errors.ErrValidation)
+	}
+	if len(req.Text) > 2000 {
+		return nil, fmt.Errorf("%w: comment text must not exceed 2000 characters", domain_errors.ErrValidation)
+	}
+
+	if _, err := s.eventRepo.GetByID(ctx, eventID); err != nil {
+		if strings.Contains(err.Error(), domain_errors.ErrNotFound.Error()) {
+			return nil, fmt.Errorf("%w: event %d", domain_errors.ErrEventNotFound, eventID)
+		}
+		return nil, err
+	}
+
+	if _, err := s.userProvider.GetByID(ctx, authorID); err != nil {
+		return nil, fmt.Errorf("%w: author %d not found", domain_errors.ErrForbidden, authorID)
+	}
+
+	comment, err := s.eventRepo.AddComment(ctx, eventID, authorID, req.Text)
+	if err != nil {
+		return nil, err
+	}
+
+	author, err := s.userProvider.GetByID(ctx, authorID)
+	if err == nil {
+		comment.AuthorName = author.Name
+	}
+
+	return comment, nil
 }
 
 // =====================================================

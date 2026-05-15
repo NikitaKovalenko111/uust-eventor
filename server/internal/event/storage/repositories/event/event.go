@@ -303,6 +303,59 @@ func (r *EventRepo) UnregisterAttendee(ctx context.Context, eventID, userID type
 	return nil
 }
 
+func (r *EventRepo) ListComments(ctx context.Context, eventID types.IdType) ([]*models.EventComment, error) {
+	query := `
+		SELECT ec.id, ec.event_id, ec.user_id, COALESCE(u.name, ''), ec.text, ec.created_at
+		FROM event_comments ec
+		JOIN users u ON u.id = ec.user_id
+		WHERE ec.event_id = $1
+		ORDER BY ec.created_at ASC, ec.id ASC
+	`
+	rows, err := r.db.QueryContext(ctx, query, eventID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	defer rows.Close()
+
+	comments := make([]*models.EventComment, 0)
+	for rows.Next() {
+		var comment models.EventComment
+		if err := rows.Scan(&comment.ID, &comment.EventID, &comment.AuthorID, &comment.AuthorName, &comment.Text, &comment.CreatedAt); err != nil {
+			return nil, fmt.Errorf("%w: comment scan error: %v", domain_errors.ErrDatabase, err)
+		}
+		comments = append(comments, &comment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	return comments, nil
+}
+
+func (r *EventRepo) AddComment(ctx context.Context, eventID, authorID types.IdType, text string) (*models.EventComment, error) {
+	query := `
+		INSERT INTO event_comments (event_id, user_id, text)
+		VALUES ($1, $2, $3)
+		RETURNING id, created_at
+	`
+	var comment models.EventComment
+	comment.EventID = eventID
+	comment.AuthorID = authorID
+	comment.Text = text
+	if err := r.db.QueryRowContext(ctx, query, eventID, authorID, text).Scan(&comment.ID, &comment.CreatedAt); err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) {
+			switch pqErr.Code {
+			case "23503":
+				return nil, fmt.Errorf("%w: event or author not found", domain_errors.ErrForeignKeyViolation)
+			case "23502":
+				return nil, fmt.Errorf("%w: missing required field", domain_errors.ErrValidation)
+			}
+		}
+		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	}
+	return &comment, nil
+}
+
 func (r *EventRepo) queryEvents(ctx context.Context, whereClause string, orderClause string, args ...interface{}) ([]*models.Event, error) {
 	query := fmt.Sprintf(`
 		SELECT

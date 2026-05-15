@@ -92,6 +92,20 @@ CREATE TABLE IF NOT EXISTS event_attendees (
 CREATE INDEX IF NOT EXISTS idx_event_attendees_user ON event_attendees(user_id);
 CREATE INDEX IF NOT EXISTS idx_event_attendees_event ON event_attendees(event_id);
 
+-- Event comments table
+CREATE TABLE IF NOT EXISTS event_comments (
+  id SERIAL PRIMARY KEY,
+  event_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_comments_event_created ON event_comments(event_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_event_comments_user ON event_comments(user_id);
+
 -- Authentication tokens table (for JWT/sessions)
 CREATE TABLE IF NOT EXISTS auth_tokens (
   id SERIAL PRIMARY KEY,

@@ -25,6 +25,24 @@ type EventResponse struct {
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
+type CommentResponse struct {
+	ID         types.IdType `json:"id"`
+	EventID    types.IdType `json:"event_id"`
+	AuthorID   types.IdType `json:"author_id"`
+	AuthorName string       `json:"author_name"`
+	Text       string       `json:"text"`
+	CreatedAt  time.Time    `json:"created_at"`
+}
+
+type CommentListResponse struct {
+	Comments []*CommentResponse `json:"comments"`
+	Count    int                `json:"count"`
+}
+
+type CreateCommentRequest struct {
+	Text string `json:"text" validate:"required,max=2000"`
+}
+
 func ToResponse(e *models.Event) *EventResponse {
 	return &EventResponse{
 		ID:          e.ID,
@@ -40,6 +58,28 @@ func ToResponse(e *models.Event) *EventResponse {
 		CreatedAt:   e.CreatedAt,
 		UpdatedAt:   e.UpdatedAt,
 	}
+}
+
+func CommentToResponse(comment *models.EventComment) *CommentResponse {
+	return &CommentResponse{
+		ID:         comment.ID,
+		EventID:    comment.EventID,
+		AuthorID:   comment.AuthorID,
+		AuthorName: comment.AuthorName,
+		Text:       comment.Text,
+		CreatedAt:  comment.CreatedAt,
+	}
+}
+
+func CommentsToListResponse(comments []*models.EventComment) *CommentListResponse {
+	result := &CommentListResponse{
+		Comments: make([]*CommentResponse, 0, len(comments)),
+		Count:    len(comments),
+	}
+	for _, comment := range comments {
+		result.Comments = append(result.Comments, CommentToResponse(comment))
+	}
+	return result
 }
 
 func nullStringToPtr(ns sql.NullString) *string {

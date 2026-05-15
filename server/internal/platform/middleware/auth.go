@@ -11,7 +11,7 @@ import (
 
 func NewJWTMiddleware(tokenService token_provider.TokenProvider, logger *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if isPublicEventReadRequest(c) {
+		if isPublicReadRequest(c) {
 			return c.Next()
 		}
 
@@ -44,7 +44,7 @@ func NewJWTMiddleware(tokenService token_provider.TokenProvider, logger *slog.Lo
 	}
 }
 
-func isPublicEventReadRequest(c *fiber.Ctx) bool {
+func isPublicReadRequest(c *fiber.Ctx) bool {
 	if c.Method() != fiber.MethodGet && c.Method() != fiber.MethodHead {
 		return false
 	}
@@ -64,6 +64,14 @@ func isPublicEventReadRequest(c *fiber.Ctx) bool {
 			return false
 		}
 		return true
+	}
+
+	if strings.HasPrefix(path, "/api/v1/users/") && strings.HasSuffix(path, "/avatar/file") {
+		suffix := strings.TrimPrefix(path, "/api/v1/users/")
+		parts := strings.Split(suffix, "/")
+		if len(parts) == 3 && parts[0] != "" && parts[1] == "avatar" && parts[2] == "file" {
+			return true
+		}
 	}
 
 	return false
