@@ -12,36 +12,46 @@ import (
 func NewJWTMiddleware(tokenService token_provider.TokenProvider, logger *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if isPublicReadRequest(c) {
+			if !authenticateIfPresent(c, tokenService, logger) {
+				return c.Next()
+			}
 			return c.Next()
 		}
 
-		authHeader := c.Get("Authorization")
-		if authHeader == "" {
+		if !authenticateIfPresent(c, tokenService, logger) {
 			logger.Warn("missing authorization header")
 			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "missing authorization header"})
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			logger.Warn("invalid authorization header format")
-			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "invalid authorization header"})
-		}
-
-		tokenString := parts[1]
-
-		claims, err := tokenService.VerifyAccessToken(tokenString)
-		if err != nil {
-			logger.Info("token verification failed", slog.Any("error", err))
-			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "invalid token"})
-		}
-
-		c.Locals("user_id", claims.UserID)
-		c.Locals("email", claims.Email)
-		c.Locals("role", claims.Role)
-		c.Locals("user_role", claims.Role)
-
 		return c.Next()
 	}
+}
+
+func authenticateIfPresent(c *fiber.Ctx, tokenService token_provider.TokenProvider, logger *slog.Logger) bool {
+	authHeader := c.Get("Authorization")
+	if authHeader == "" {
+		return false
+	}
+
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		logger.Warn("invalid authorization header format")
+		return false
+	}
+
+	tokenString := parts[1]
+
+	claims, err := tokenService.VerifyAccessToken(tokenString)
+	if err != nil {
+		logger.Info("token verification failed", slog.Any("error", err))
+		return false
+	}
+
+	c.Locals("user_id", claims.UserID)
+	c.Locals("email", claims.Email)
+	c.Locals("role", claims.Role)
+	c.Locals("user_role", claims.Role)
+	return true
 }
 
 func isPublicReadRequest(c *fiber.Ctx) bool {

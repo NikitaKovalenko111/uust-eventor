@@ -8,6 +8,9 @@ import { UserCabinetPage } from '../pages/UserCabinetPage';
 import { ModeratorCabinetPage } from '../pages/ModeratorCabinetPage';
 import { EventsPage } from '../pages/EventsPage';
 import { EventDetailsPage } from '../pages/EventDetailsPage';
+import { ProfilePage } from '../pages/ProfilePage';
+import { UserSearchPage } from '../pages/UserSearchPage';
+import { FriendRequestsPage } from '../pages/FriendRequestsPage';
 import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -30,6 +33,8 @@ export const RootNavigator = () => {
         {!isAuthenticated ? (
           <>
             <Stack.Screen name="Events" component={EventsPage} />
+            <Stack.Screen name="UserSearch" component={UserSearchPage} />
+            <Stack.Screen name="FriendRequests" component={FriendRequestsPage} />
             <Stack.Screen name="EventDetails" component={EventDetailsPage} />
             <Stack.Screen name="Auth" component={AuthPage} />
           </>
@@ -41,7 +46,10 @@ export const RootNavigator = () => {
               <Stack.Screen name="UserCabinet" component={UserCabinetPage} />
             )}
             <Stack.Screen name="Events" component={EventsPage} />
+            <Stack.Screen name="UserSearch" component={UserSearchPage} />
+            <Stack.Screen name="FriendRequests" component={FriendRequestsPage} />
             <Stack.Screen name="EventDetails" component={EventDetailsPage} />
+            <Stack.Screen name="Profile" component={ProfilePage} />
           </>
         )}
       </Stack.Navigator>

@@ -92,6 +92,8 @@ export const UserCabinetPage = ({ navigation }: Props) => {
       </AnimatedEntry>
 
       <PrimaryButton title="Открыть страницу мероприятий" type="outline" onPress={() => navigation.navigate('Events')} />
+      <PrimaryButton title="Поиск пользователей по email" type="outline" onPress={() => navigation.navigate('UserSearch')} />
+      <PrimaryButton title="Входящие запросы в друзья" type="outline" onPress={() => navigation.navigate('FriendRequests')} />
 
       <Text style={styles.sectionTitle}>Мои мероприятия</Text>
       {myEvents.length === 0 ? <Text style={styles.empty}>Вы пока не записаны на мероприятия</Text> : null}

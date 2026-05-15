@@ -43,11 +43,13 @@ func Init(logger *slog.Logger, eventService *event_service.EventService, fileSto
 
 // RegisterRoutes регистрирует маршруты событий (все защищены authMiddleware)
 func (c *EventController) RegisterRoutes(app *fiber.App, rout string, authMiddleware *fiber.Handler) {
-	publicRouter := app.Group(rout)
+	publicRouter := app.Group(rout, *authMiddleware)
 
 	publicRouter.Get("", c.ListEvents)
 	publicRouter.Get("/", c.ListEvents)
 	publicRouter.Get("/:id/comments", c.ListComments)
+	// attendees listing (requires auth and only visible to creator or moderators)
+	app.Get(rout+"/:id/attendees", *authMiddleware, c.ListAttendees)
 	publicRouter.Get("/:id", c.GetEvent)
 	publicRouter.Get("/images/:image_id/file", c.GetImageFile)
 
@@ -258,6 +260,7 @@ func (c *EventController) ListEvents(ctx *fiber.Ctx) error {
 	limit := ctx.QueryInt("limit", 20)
 	offset := ctx.QueryInt("offset", 0)
 	search := strings.TrimSpace(ctx.Query("search"))
+	city := strings.TrimSpace(ctx.Query("city"))
 
 	if limit < 1 || limit > 100 {
 		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
@@ -270,14 +273,17 @@ func (c *EventController) ListEvents(ctx *fiber.Ctx) error {
 		})
 	}
 
-	events, err := c.eventService.List(ctx.UserContext(), limit, offset, search)
+	requesterID, _ := ctx.Locals("user_id").(types.IdType)
+	events, err := c.eventService.List(ctx.UserContext(), limit, offset, search, city, requesterID)
 	if err != nil {
 		return c.handleServiceError(ctx, err, "list events")
 	}
 
 	responses := make([]*event_dto.EventResponse, 0, len(events))
-	for _, e := range events {
-		responses = append(responses, event_dto.ToResponse(e))
+	for _, ranked := range events {
+		resp := event_dto.ToRankedResponse(ranked.Event, ranked.RelevanceScore)
+		resp.FriendsCount = ranked.FriendsCount
+		responses = append(responses, resp)
 	}
 
 	return ctx.Status(fiber.StatusOK).JSON(ListResponse{
@@ -311,6 +317,36 @@ func (c *EventController) ListComments(ctx *fiber.Ctx) error {
 	}
 
 	return ctx.Status(fiber.StatusOK).JSON(event_dto.CommentsToListResponse(comments))
+}
+
+func (c *EventController) ListAttendees(ctx *fiber.Ctx) error {
+	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid event ID", Code: fiber.StatusBadRequest})
+	}
+
+	requesterID, _ := ctx.Locals("user_id").(types.IdType)
+	role, _ := ctx.Locals("role").(string)
+
+	event, err := c.eventService.GetByID(ctx.UserContext(), types.IdType(idParam))
+	if err != nil {
+		return c.handleServiceError(ctx, err, "get event for attendees")
+	}
+
+	if requesterID == 0 && role == "" {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: fiber.StatusUnauthorized})
+	}
+
+	if event.CreatorID != requesterID && role != "moderator" {
+		return ctx.Status(fiber.StatusForbidden).JSON(ErrorResponse{Error: "forbidden", Code: fiber.StatusForbidden})
+	}
+
+	attendees, err := c.eventService.ListAttendees(ctx.UserContext(), types.IdType(idParam))
+	if err != nil {
+		return c.handleServiceError(ctx, err, "list attendees")
+	}
+
+	return ctx.Status(fiber.StatusOK).JSON(event_dto.AttendeesToListResponse(attendees))
 }
 
 // =====================================================

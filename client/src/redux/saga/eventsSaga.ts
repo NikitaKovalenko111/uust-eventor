@@ -19,8 +19,9 @@ function* fetchEventsWorker() {
     const searchText: string = yield select((state: RootState) => state.events.searchText);
     const limit: number = yield select((state: RootState) => state.events.limit);
     const offset: number = yield select((state: RootState) => state.events.offset);
-    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText, limit, offset);
-    yield put(fetchEventsSuccess(events));
+    const city: string = yield select((state: RootState) => state.auth.user?.city ?? state.profile.profile?.city ?? '');
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText, limit, offset, city);
+    yield put(fetchEventsSuccess(sortEventsByCityRelevance(events, city)));
   } catch (error) {
     yield put(fetchEventsFailure(error instanceof Error ? error.message : 'Ошибка загрузки мероприятий'));
   }
@@ -43,8 +44,11 @@ function* toggleRegistrationWorker(action: PayloadAction<string>) {
       yield call(registerToEventApi, action.payload);
     }
     const searchText: string = yield select((state: RootState) => state.events.searchText);
-    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText);
-    yield put(fetchEventsSuccess(events));
+    const limit: number = yield select((state: RootState) => state.events.limit);
+    const offset: number = yield select((state: RootState) => state.events.offset);
+    const city: string = yield select((state: RootState) => state.auth.user?.city ?? state.profile.profile?.city ?? '');
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText, limit, offset, city);
+    yield put(fetchEventsSuccess(sortEventsByCityRelevance(events, city)));
   } catch (error) {
     yield put(eventsFailure(error instanceof Error ? error.message : 'Ошибка регистрации на мероприятие'));
   }
@@ -54,8 +58,11 @@ function* deleteEventWorker(action: PayloadAction<string>) {
   try {
     yield call(deleteEventApi, action.payload);
     const searchText: string = yield select((state: RootState) => state.events.searchText);
-    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText);
-    yield put(fetchEventsSuccess(events));
+    const limit: number = yield select((state: RootState) => state.events.limit);
+    const offset: number = yield select((state: RootState) => state.events.offset);
+    const city: string = yield select((state: RootState) => state.auth.user?.city ?? state.profile.profile?.city ?? '');
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText, limit, offset, city);
+    yield put(fetchEventsSuccess(sortEventsByCityRelevance(events, city)));
   } catch (error) {
     yield put(eventsFailure(error instanceof Error ? error.message : 'Ошибка удаления мероприятия'));
   }
@@ -65,8 +72,11 @@ function* finishEventWorker(action: PayloadAction<string>) {
   try {
     yield call(finishEventApi, action.payload);
     const searchText: string = yield select((state: RootState) => state.events.searchText);
-    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText);
-    yield put(fetchEventsSuccess(events));
+    const limit: number = yield select((state: RootState) => state.events.limit);
+    const offset: number = yield select((state: RootState) => state.events.offset);
+    const city: string = yield select((state: RootState) => state.auth.user?.city ?? state.profile.profile?.city ?? '');
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText, limit, offset, city);
+    yield put(fetchEventsSuccess(sortEventsByCityRelevance(events, city)));
   } catch (error) {
     yield put(eventsFailure(error instanceof Error ? error.message : 'Ошибка завершения мероприятия'));
   }
@@ -80,11 +90,40 @@ function* createEventWorker(action: PayloadAction<CreateEventPayload>) {
     }
     yield call(createEventApi, action.payload);
     const searchText: string = yield select((state: RootState) => state.events.searchText);
-    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText);
-    yield put(fetchEventsSuccess(events));
+    const limit: number = yield select((state: RootState) => state.events.limit);
+    const offset: number = yield select((state: RootState) => state.events.offset);
+    const city: string = yield select((state: RootState) => state.auth.user?.city ?? state.profile.profile?.city ?? '');
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, searchText, limit, offset, city);
+    yield put(fetchEventsSuccess(sortEventsByCityRelevance(events, city)));
   } catch (error) {
     yield put(eventsFailure(error instanceof Error ? error.message : 'Ошибка создания мероприятия'));
   }
+}
+
+function sortEventsByCityRelevance(events: EventItem[], city: string) {
+  const normalizedCity = city.trim().toLowerCase();
+  if (!normalizedCity) {
+    return [...events].sort((left, right) => (right.relevanceScore ?? 0) - (left.relevanceScore ?? 0));
+  }
+
+  return events
+    .map((event, index) => ({
+      event,
+      index,
+      cityRelevant: event.location.toLowerCase().includes(normalizedCity),
+      score: event.relevanceScore ?? 0,
+    }))
+    .sort((left, right) => {
+      if (left.cityRelevant !== right.cityRelevant) {
+        return left.cityRelevant ? -1 : 1;
+      }
+
+      if (left.score !== right.score) {
+        return right.score - left.score;
+      }
+      return left.index - right.index;
+    })
+    .map(({ event }) => event);
 }
 
 export function* watchEventsSaga() {

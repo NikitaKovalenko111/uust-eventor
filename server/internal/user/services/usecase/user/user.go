@@ -184,6 +184,17 @@ func (s *UserService) List(ctx context.Context, limit, offset int) ([]*models.Us
 	return users, nil
 }
 
+func (s *UserService) SearchByEmail(ctx context.Context, query string, limit int) ([]*models.User, error) {
+	users, err := s.repo.SearchByEmail(ctx, query, limit)
+	if err != nil {
+		return nil, erors.WrapDB(err)
+	}
+	for _, u := range users {
+		u.PasswordHash = ""
+	}
+	return users, nil
+}
+
 // =====================================================
 // DELETE
 // =====================================================
@@ -268,6 +279,89 @@ func (s *UserService) DeleteAvatar(ctx context.Context, id types.IdType) (*model
 	}
 	updated.PasswordHash = ""
 	return updated, nil
+}
+
+// AddFriend создаёт взаимную дружбу между двумя пользователями
+func (s *UserService) AddFriend(ctx context.Context, userID, friendID types.IdType) error {
+	if userID == friendID {
+		return fmt.Errorf("cannot add self as friend")
+	}
+	// убедиться, что оба пользователя существуют
+	if _, err := s.repo.GetByID(ctx, userID); err != nil {
+		return err
+	}
+	if _, err := s.repo.GetByID(ctx, friendID); err != nil {
+		return err
+	}
+
+	if err := s.repo.AddFriend(ctx, userID, friendID); err != nil {
+		return erors.WrapDB(err)
+	}
+	return nil
+}
+
+// SendFriendRequest создает запрос дружбы от requester к recipient
+func (s *UserService) SendFriendRequest(ctx context.Context, requesterID, recipientID types.IdType, message string) (int64, error) {
+	if requesterID == recipientID {
+		return 0, fmt.Errorf("cannot send friend request to self")
+	}
+	// ensure users exist
+	if _, err := s.repo.GetByID(ctx, requesterID); err != nil {
+		return 0, err
+	}
+	if _, err := s.repo.GetByID(ctx, recipientID); err != nil {
+		return 0, err
+	}
+	id, err := s.repo.CreateFriendRequest(ctx, requesterID, recipientID, message)
+	if err != nil {
+		return 0, erors.WrapDB(err)
+	}
+	return id, nil
+}
+
+// ListIncomingFriendRequests возвращает список входящих запросов (пользователи и request ids)
+func (s *UserService) ListIncomingFriendRequests(ctx context.Context, recipientID types.IdType) ([]*models.User, []int64, error) {
+	users, ids, err := s.repo.GetIncomingFriendRequests(ctx, recipientID)
+	if err != nil {
+		return nil, nil, erors.WrapDB(err)
+	}
+	return users, ids, nil
+}
+
+// AcceptFriendRequest принимает запрос и создаёт дружбу
+func (s *UserService) AcceptFriendRequest(ctx context.Context, requestID int64, recipientID types.IdType) error {
+	requesterID, recID, err := s.repo.GetFriendRequestByID(ctx, requestID)
+	if err != nil {
+		return err
+	}
+	if recID != recipientID {
+		return fmt.Errorf("%w: not your friend request", erors.ErrForbidden)
+	}
+
+	// create mutual friendship
+	if err := s.repo.AddFriend(ctx, requesterID, recipientID); err != nil {
+		return erors.WrapDB(err)
+	}
+
+	if err := s.repo.UpdateFriendRequestStatus(ctx, requestID, "accepted"); err != nil {
+		return erors.WrapDB(err)
+	}
+	return nil
+}
+
+// RejectFriendRequest отмечает запрос как rejected
+func (s *UserService) RejectFriendRequest(ctx context.Context, requestID int64, recipientID types.IdType) error {
+	_, recID, err := s.repo.GetFriendRequestByID(ctx, requestID)
+	if err != nil {
+		return err
+	}
+	if recID != recipientID {
+		return fmt.Errorf("%w: not your friend request", erors.ErrForbidden)
+	}
+	if err := s.repo.UpdateFriendRequestStatus(ctx, requestID, "rejected"); err != nil {
+		return erors.WrapDB(err)
+	}
+	return nil
 }
 
 func (s *UserService) GetAvatarURL(ctx context.Context, id types.IdType) (string, error) {

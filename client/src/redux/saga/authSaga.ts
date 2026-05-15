@@ -42,7 +42,7 @@ function* loginWorker(action: PayloadAction<AuthPayload>): Generator {
     const user = toClientUser(userResponse, avatarUri);
     yield put(authSuccess({ token: data.access_token, refreshToken: data.refresh_token, user }));
     yield put(setProfile(user));
-    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi);
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, '', 20, 0, user.city);
     yield put(fetchEventsSuccess(events));
   } catch (error) {
     yield put(authFailure(error instanceof Error ? error.message : 'Ошибка входа'));
@@ -63,7 +63,7 @@ function* registerWorker(action: PayloadAction<RegisterPayload>): Generator {
     const user = toClientUser(userResponse, avatarUri);
     yield put(authSuccess({ token: data.access_token, refreshToken: data.refresh_token, user }));
     yield put(setProfile(user));
-    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi);
+    const events: Awaited<ReturnType<typeof fetchEventsApi>> = yield call(fetchEventsApi, '', 20, 0, user.city);
     yield put(fetchEventsSuccess(events));
   } catch (error) {
     yield put(authFailure(error instanceof Error ? error.message : 'Ошибка регистрации'));

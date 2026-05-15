@@ -23,6 +23,7 @@ export const EventsPage = ({ navigation }: Props) => {
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
   const userRole = useAppSelector((state) => state.auth.user?.role);
   const userId = useAppSelector((state) => state.auth.user?.id ?? '');
+  const userCity = useAppSelector((state) => state.auth.user?.city ?? state.profile.profile?.city ?? '');
   const isModerator = userRole === 'moderator';
 
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -36,7 +37,7 @@ export const EventsPage = ({ navigation }: Props) => {
 
   useEffect(() => {
     dispatch(fetchEventsRequest());
-  }, [dispatch]);
+  }, [dispatch, userCity]);
 
   useEffect(() => {
     // refetch when page or limit changes

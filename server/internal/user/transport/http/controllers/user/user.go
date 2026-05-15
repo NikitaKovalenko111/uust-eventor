@@ -47,9 +47,16 @@ func (c *UserController) RegisterRoutes(app *fiber.App, rout string, authMiddlew
 	router.Delete("/me/avatar", c.DeleteAvatar)
 	router.Get("/:id/avatar", c.GetAvatar)
 	publicRouter.Get("/:id/avatar/file", c.GetAvatarFile)
+	router.Get("/search/by-email", c.SearchByEmail)
 	router.Get("/:id", c.GetByID)   // Просмотр другого пользователя (опционально)
 	router.Put("/:id", c.Update)    // Обновление другого (только для модераторов)
 	router.Delete("/:id", c.Delete) // Удаление (только для модераторов/админов)
+	router.Post("/:id/friends", c.AddFriend)
+	// Friend requests
+	router.Post("/:id/friend-requests", c.SendFriendRequest)
+	router.Get("/me/friend-requests", c.ListIncomingFriendRequests)
+	router.Post("/friend-requests/:id/accept", c.AcceptFriendRequest)
+	router.Post("/friend-requests/:id/reject", c.RejectFriendRequest)
 }
 
 // HealthCheck godoc
@@ -361,6 +368,146 @@ func (c *UserController) GetByID(ctx *fiber.Ctx) error {
 	}
 
 	return ctx.Status(fiber.StatusOK).JSON(user_dto.ToResponse(user))
+}
+
+// SearchByEmail godoc
+//
+//	@Summary		Search users by email
+//	@Description	Returns users whose email matches the query substring
+//	@Tags		users
+//	@Produce		json
+//	@Param		email	query	string	true	"Email search query"
+//	@Success		200	{object}	user_dto.UserListResponse
+//	@Failure		400	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/api/v1/users/search [get]
+func (c *UserController) SearchByEmail(ctx *fiber.Ctx) error {
+	query := strings.TrimSpace(ctx.Query("email"))
+	if query == "" {
+		return ctx.Status(fiber.StatusOK).JSON(user_dto.UserListResponse{Users: []*user_dto.UserResponse{}, Total: 0, Limit: 0, Offset: 0, HasMore: false})
+	}
+
+	users, err := c.userService.SearchByEmail(ctx.UserContext(), query, 20)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "search users by email")
+	}
+
+	return ctx.Status(fiber.StatusOK).JSON(user_dto.ToListResponse(users, int64(len(users)), int64(len(users)), 0))
+}
+
+// AddFriend godoc
+// @Summary Add friend
+// @Description Send friend request / create friendship (mutual)
+// @Tags users
+// @Security BearerAuth
+// @Param id path int true "User ID to add as friend"
+// @Success 200
+// @Failure 400
+// @Failure 401
+// @Failure 404
+// @Router /api/v1/users/{id}/friends [post]
+func (c *UserController) AddFriend(ctx *fiber.Ctx) error {
+	requesterID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok || requesterID == 0 {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: fiber.StatusUnauthorized})
+	}
+
+	id, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid user ID", Code: fiber.StatusBadRequest})
+	}
+	targetID := types.IdType(id)
+
+	if requesterID == targetID {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "cannot add self as friend", Code: fiber.StatusBadRequest})
+	}
+
+	if err := c.userService.AddFriend(ctx.UserContext(), requesterID, targetID); err != nil {
+		return c.handleServiceError(ctx, err, "add friend")
+	}
+	return ctx.SendStatus(fiber.StatusOK)
+}
+
+// SendFriendRequest отправляет запрос дружбы другому пользователю
+func (c *UserController) SendFriendRequest(ctx *fiber.Ctx) error {
+	requesterID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok || requesterID == 0 {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: fiber.StatusUnauthorized})
+	}
+
+	id, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid user ID", Code: fiber.StatusBadRequest})
+	}
+	recipientID := types.IdType(id)
+
+	if requesterID == recipientID {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "cannot send friend request to self", Code: fiber.StatusBadRequest})
+	}
+
+	var payload struct {
+		Message string `json:"message"`
+	}
+	_ = ctx.BodyParser(&payload)
+
+	reqID, err := c.userService.SendFriendRequest(ctx.UserContext(), requesterID, recipientID, payload.Message)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "send friend request")
+	}
+	return ctx.Status(fiber.StatusCreated).JSON(map[string]interface{}{"request_id": reqID})
+}
+
+// ListIncomingFriendRequests возвращает входящие запросы для текущего
+func (c *UserController) ListIncomingFriendRequests(ctx *fiber.Ctx) error {
+	userID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok || userID == 0 {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: fiber.StatusUnauthorized})
+	}
+	users, ids, err := c.userService.ListIncomingFriendRequests(ctx.UserContext(), userID)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "list friend requests")
+	}
+	// build simple response
+	resp := make([]map[string]interface{}, 0, len(users))
+	for i, u := range users {
+		resp = append(resp, map[string]interface{}{
+			"request_id": ids[i],
+			"user":       map[string]interface{}{"id": u.ID, "name": u.Name, "avatar_image_id": u.AvatarImageID.String},
+		})
+	}
+	return ctx.Status(fiber.StatusOK).JSON(map[string]interface{}{"requests": resp})
+}
+
+// AcceptFriendRequest принимает запрос
+func (c *UserController) AcceptFriendRequest(ctx *fiber.Ctx) error {
+	userID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok || userID == 0 {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: fiber.StatusUnauthorized})
+	}
+	reqID, err := strconv.ParseInt(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid request id", Code: fiber.StatusBadRequest})
+	}
+	if err := c.userService.AcceptFriendRequest(ctx.UserContext(), reqID, userID); err != nil {
+		return c.handleServiceError(ctx, err, "accept friend request")
+	}
+	return ctx.SendStatus(fiber.StatusOK)
+}
+
+// RejectFriendRequest отклоняет запрос
+func (c *UserController) RejectFriendRequest(ctx *fiber.Ctx) error {
+	userID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok || userID == 0 {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: fiber.StatusUnauthorized})
+	}
+	reqID, err := strconv.ParseInt(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid request id", Code: fiber.StatusBadRequest})
+	}
+	if err := c.userService.RejectFriendRequest(ctx.UserContext(), reqID, userID); err != nil {
+		return c.handleServiceError(ctx, err, "reject friend request")
+	}
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 // Update godoc

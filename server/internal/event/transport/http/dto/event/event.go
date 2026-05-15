@@ -43,6 +43,13 @@ type EventResponse struct {
 	// Whether event is marked as finished
 	// @example false
 	Finished bool `json:"finished"`
+	// Relevance score for personalized recommendations
+	// @example 85
+	RelevanceScore int `json:"relevance_score"`
+	// Number of user's friends attending this event
+	// @example 3
+	// @Minimum(0)
+	FriendsCount int `json:"friends_count"`
 	// Creation timestamp in RFC3339 format
 	// @example "2024-01-15T08:30:00Z"
 	CreatedAt time.Time `json:"created_at"`
@@ -90,19 +97,57 @@ type CreateCommentRequest struct {
 
 func ToResponse(e *models.Event) *EventResponse {
 	return &EventResponse{
-		ID:          e.ID,
-		Title:       e.Title,
-		Description: e.Description,
-		EventDate:   e.EventDate,
-		Location:    e.Location,
-		ImageID:     nullStringToPtr(e.ImageID),
-		CreatorID:   e.CreatorID,
-		Tags:        append([]string(nil), e.Tags...),
-		Attendees:   idSliceToStrings(e.Attendees),
-		Finished:    e.Finished,
-		CreatedAt:   e.CreatedAt,
-		UpdatedAt:   e.UpdatedAt,
+		ID:             e.ID,
+		Title:          e.Title,
+		Description:    e.Description,
+		EventDate:      e.EventDate,
+		Location:       e.Location,
+		ImageID:        nullStringToPtr(e.ImageID),
+		CreatorID:      e.CreatorID,
+		Tags:           append([]string(nil), e.Tags...),
+		Attendees:      idSliceToStrings(e.Attendees),
+		Finished:       e.Finished,
+		RelevanceScore: 0,
+		CreatedAt:      e.CreatedAt,
+		UpdatedAt:      e.UpdatedAt,
 	}
+}
+
+func ToRankedResponse(e *models.Event, relevanceScore int) *EventResponse {
+	resp := ToResponse(e)
+	resp.RelevanceScore = relevanceScore
+	// default friends count is zero; service may set it later if available
+	return resp
+}
+
+type AttendeeResponse struct {
+	ID       types.IdType `json:"id"`
+	UserID   types.IdType `json:"user_id"`
+	Name     string       `json:"name"`
+	AvatarID string       `json:"avatar_image_id,omitempty"`
+	JoinedAt time.Time    `json:"joined_at"`
+}
+
+type AttendeeListResponse struct {
+	Attendees []*AttendeeResponse `json:"attendees"`
+	Count     int                 `json:"count"`
+}
+
+func AttendeesToListResponse(att []*models.EventAttendee) *AttendeeListResponse {
+	res := &AttendeeListResponse{
+		Attendees: make([]*AttendeeResponse, 0, len(att)),
+		Count:     len(att),
+	}
+	for _, a := range att {
+		res.Attendees = append(res.Attendees, &AttendeeResponse{
+			ID:       a.ID,
+			UserID:   a.UserID,
+			Name:     a.Name,
+			AvatarID: a.AvatarID,
+			JoinedAt: a.JoinedAt,
+		})
+	}
+	return res
 }
 
 func CommentToResponse(comment *models.EventComment) *CommentResponse {
