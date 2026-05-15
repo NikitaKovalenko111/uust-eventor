@@ -1,6 +1,6 @@
 import { PayloadAction } from '@reduxjs/toolkit';
 import { call, put, select, takeLatest } from 'redux-saga/effects';
-import { updateProfileApi } from '../../api/api';
+import { deleteAvatarApi, updateAvatarApi, updateProfileApi } from '../../api/api';
 import { User } from '../../types/models';
 import { updateAuthUser } from '../slices/authSlice';
 import {
@@ -13,11 +13,11 @@ import type { RootState } from '../../redux/store';
 
 function* updateProfileWorker(action: PayloadAction<Partial<User>>) {
   try {
-    const userId: string | undefined = yield select((state: RootState) => state.auth.user?.id);
-    if (!userId) {
+    const currentUser: User | null = yield select((state: RootState) => state.auth.user);
+    if (!currentUser) {
       throw new Error('Профиль недоступен');
     }
-    const profile: Awaited<ReturnType<typeof updateProfileApi>> = yield call(updateProfileApi, userId, action.payload);
+    const profile: Awaited<ReturnType<typeof updateProfileApi>> = yield call(updateProfileApi, action.payload);
     yield put(updateProfileSuccess(profile));
     yield put(updateAuthUser(profile));
   } catch (error) {
@@ -27,13 +27,11 @@ function* updateProfileWorker(action: PayloadAction<Partial<User>>) {
 
 function* updateAvatarWorker(action: PayloadAction<string>) {
   try {
-    const userId: string | undefined = yield select((state: RootState) => state.auth.user?.id);
-    if (!userId) {
+    const currentUser: User | null = yield select((state: RootState) => state.auth.user);
+    if (!currentUser) {
       throw new Error('Профиль недоступен');
     }
-    const profile: Awaited<ReturnType<typeof updateProfileApi>> = yield call(updateProfileApi, userId, {
-      avatarUri: action.payload,
-    });
+    const profile: Awaited<ReturnType<typeof updateAvatarApi>> = yield call(updateAvatarApi, action.payload);
     yield put(updateProfileSuccess(profile));
     yield put(updateAuthUser(profile));
   } catch (error) {
@@ -41,7 +39,22 @@ function* updateAvatarWorker(action: PayloadAction<string>) {
   }
 }
 
+function* deleteAvatarWorker() {
+  try {
+    const currentUser: User | null = yield select((state: RootState) => state.auth.user);
+    if (!currentUser) {
+      throw new Error('Профиль недоступен');
+    }
+    const profile: Awaited<ReturnType<typeof deleteAvatarApi>> = yield call(deleteAvatarApi);
+    yield put(updateProfileSuccess(profile));
+    yield put(updateAuthUser(profile));
+  } catch (error) {
+    yield put(profileFailure(error instanceof Error ? error.message : 'Ошибка удаления аватара'));
+  }
+}
+
 export function* watchProfileSaga() {
   yield takeLatest(updateProfileRequest.type, updateProfileWorker);
   yield takeLatest(updateAvatarRequest.type, updateAvatarWorker);
+  yield takeLatest('profile/deleteAvatarRequest', deleteAvatarWorker);
 }

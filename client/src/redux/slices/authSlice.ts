@@ -4,6 +4,7 @@ import { AuthPayload, RegisterPayload, User } from '../../types/models';
 type AuthState = {
   isAuthenticated: boolean;
   token: string | null;
+  refreshToken: string | null;
   user: User | null;
   loading: boolean;
   error: string | null;
@@ -12,6 +13,7 @@ type AuthState = {
 const initialState: AuthState = {
   isAuthenticated: false,
   token: null,
+  refreshToken: null,
   user: null,
   loading: false,
   error: null,
@@ -29,10 +31,11 @@ const authSlice = createSlice({
       state.loading = true;
       state.error = null;
     },
-    authSuccess(state, action: PayloadAction<{ token: string; user: User }>) {
+    authSuccess(state, action: PayloadAction<{ token: string; refreshToken: string; user: User }>) {
       state.loading = false;
       state.isAuthenticated = true;
       state.token = action.payload.token;
+      state.refreshToken = action.payload.refreshToken;
       state.user = action.payload.user;
       state.error = null;
     },
@@ -46,6 +49,7 @@ const authSlice = createSlice({
     logout(state) {
       state.isAuthenticated = false;
       state.token = null;
+      state.refreshToken = null;
       state.user = null;
       state.loading = false;
       state.error = null;

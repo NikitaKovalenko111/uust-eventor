@@ -28,7 +28,10 @@ const profileSlice = createSlice({
       state.loading = true;
       state.error = null;
       if (state.profile) {
-        state.profile.avatarUri = action.payload;
+        state.profile = {
+          ...state.profile,
+          avatarUri: action.payload,
+        };
       }
     },
     updateProfileSuccess(state, action: PayloadAction<User>) {

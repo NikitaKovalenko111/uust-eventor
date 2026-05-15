@@ -5,6 +5,7 @@ export type User = {
   name: string;
   email: string;
   role: UserRole;
+  city: string;
   about: string;
   faculty: string;
   course: string;
@@ -31,12 +32,12 @@ export type AuthPayload = {
 
 export type RegisterPayload = AuthPayload & {
   name: string;
+  city: string;
   role: UserRole;
 };
 
 export type CreateEventPayload = {
   title: string;
-  shortDescription: string;
   description: string;
   date: string;
   location: string;

@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EventItem } from '../types/models';
 import { theme } from '../constants/theme';
 import { PrimaryButton } from './PrimaryButton';
@@ -11,8 +12,26 @@ type Props = {
 };
 
 export const EventCard = ({ eventItem, isRegistered, onPress, onToggleRegistration }: Props) => {
+  const [coverLoadFailed, setCoverLoadFailed] = useState(false);
+  const shouldShowImage = Boolean(eventItem.imageUri) && !coverLoadFailed;
+
   return (
     <Pressable onPress={onPress} style={styles.card}>
+      {shouldShowImage ? (
+        <Image
+          source={{ uri: eventItem.imageUri }}
+          style={styles.cover}
+          resizeMode="cover"
+          onError={() => {
+            setCoverLoadFailed(true);
+            console.log('[event-cover] failed to load', {
+              eventId: eventItem.id,
+              imageUri: eventItem.imageUri,
+            });
+          }}
+        />
+      ) : null}
+      {eventItem.imageUri && coverLoadFailed ? <Text style={styles.coverFallback}>Не удалось загрузить обложку</Text> : null}
       <View style={styles.row}>
         <Text style={styles.title}>{eventItem.title}</Text>
         <Text style={styles.date}>{eventItem.date}</Text>
@@ -41,6 +60,23 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     padding: theme.spacing.md,
     gap: 8,
+  },
+  cover: {
+    width: '100%',
+    height: 160,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.card,
+  },
+  coverFallback: {
+    width: '100%',
+    minHeight: 48,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.card,
+    color: theme.colors.muted,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    lineHeight: 48,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',

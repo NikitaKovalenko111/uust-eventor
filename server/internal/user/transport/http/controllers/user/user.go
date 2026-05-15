@@ -2,7 +2,9 @@
 package user_controller
 
 import (
+	"encoding/base64"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -37,12 +39,14 @@ func Init(logger *slog.Logger, userService *user_service.UserService) *UserContr
 // Все маршруты защищены authMiddleware
 func (c *UserController) RegisterRoutes(app *fiber.App, rout string, authMiddleware fiber.Handler) {
 	router := app.Group(rout, authMiddleware)
+	publicRouter := app.Group(rout)
 
 	router.Get("/me", c.GetMe)    // Текущий пользователь
 	router.Put("/me", c.UpdateMe) // Обновление своего профиля
 	router.Put("/me/avatar", c.UpdateAvatar)
 	router.Delete("/me/avatar", c.DeleteAvatar)
 	router.Get("/:id/avatar", c.GetAvatar)
+	publicRouter.Get("/:id/avatar/file", c.GetAvatarFile)
 	router.Get("/:id", c.GetByID)   // Просмотр другого пользователя (опционально)
 	router.Put("/:id", c.Update)    // Обновление другого (только для модераторов)
 	router.Delete("/:id", c.Delete) // Удаление (только для модераторов/админов)
@@ -220,8 +224,53 @@ func (c *UserController) GetAvatar(ctx *fiber.Ctx) error {
 	if err != nil {
 		return c.handleServiceError(ctx, err, "get avatar")
 	}
+	c.logger.Info("avatar metadata requested", slog.Uint64("user_id", id), slog.String("avatar_url", avatarURL))
 
-	return ctx.Status(http.StatusOK).JSON(AvatarResponse{URL: avatarURL})
+	reader, contentType, err := c.userService.OpenAvatar(ctx.UserContext(), types.IdType(id))
+	if err != nil {
+		return c.handleServiceError(ctx, err, "get avatar file")
+	}
+	defer func() {
+		if closer, ok := reader.(io.Closer); ok {
+			_ = closer.Close()
+		}
+	}()
+
+	avatarBytes, err := io.ReadAll(reader)
+	if err != nil {
+		c.logger.Error("failed to read avatar file", slog.Any("error", err))
+		return ctx.Status(http.StatusInternalServerError).JSON(ErrorResponse{Error: "cannot read avatar file", Code: http.StatusInternalServerError})
+	}
+	c.logger.Info("avatar file read", slog.Uint64("user_id", id), slog.String("content_type", contentType), slog.Int("bytes", len(avatarBytes)))
+
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	dataURL := "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(avatarBytes)
+	c.logger.Info("avatar data url built", slog.Uint64("user_id", id), slog.Int("data_url_length", len(dataURL)))
+	return ctx.Status(http.StatusOK).JSON(AvatarResponse{DataURL: dataURL, URL: avatarURL})
+}
+
+func (c *UserController) GetAvatarFile(ctx *fiber.Ctx) error {
+	id, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(http.StatusBadRequest).JSON(ErrorResponse{Error: "invalid user ID", Code: http.StatusBadRequest})
+	}
+
+	reader, contentType, err := c.userService.OpenAvatar(ctx.UserContext(), types.IdType(id))
+	if err != nil {
+		return c.handleServiceError(ctx, err, "get avatar file")
+	}
+	defer func() {
+		if closer, ok := reader.(io.Closer); ok {
+			_ = closer.Close()
+		}
+	}()
+	c.logger.Info("avatar file stream requested", slog.Uint64("user_id", id), slog.String("content_type", contentType))
+
+	ctx.Type(contentType)
+	return ctx.SendStream(reader)
 }
 
 // =====================================================
@@ -421,7 +470,8 @@ type ErrorResponse struct {
 }
 
 type AvatarResponse struct {
-	URL string `json:"url"`
+	DataURL string `json:"data_url,omitempty"`
+	URL     string `json:"url,omitempty"`
 }
 
 // formatValidationErrors форматирует ошибки validator

@@ -3,8 +3,8 @@ package event_service
 import (
 	"context"
 	"database/sql"
-	stderrors "errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -12,6 +12,7 @@ import (
 	domain_errors "eventor/internal/event/domain/errors"
 	"eventor/internal/event/domain/models"
 	event_repo "eventor/internal/event/storage/repositories/event"
+	file_storage "eventor/internal/platform/storage/files"
 	"eventor/internal/platform/types"
 )
 
@@ -19,13 +20,15 @@ import (
 type EventService struct {
 	eventRepo    *event_repo.EventRepo
 	userProvider user_provider.UserProvider
+	fileStorage  *file_storage.FileStorage
 }
 
 // New создаёт новый сервис
-func Init(eventRepo *event_repo.EventRepo, userProvider user_provider.UserProvider) *EventService {
+func Init(eventRepo *event_repo.EventRepo, userProvider user_provider.UserProvider, fileStorage *file_storage.FileStorage) *EventService {
 	return &EventService{
 		eventRepo:    eventRepo,
 		userProvider: userProvider,
+		fileStorage:  fileStorage,
 	}
 }
 
@@ -35,20 +38,22 @@ func Init(eventRepo *event_repo.EventRepo, userProvider user_provider.UserProvid
 
 // CreateEventRequest данные для создания события
 type CreateEventRequest struct {
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	EventDate   time.Time `json:"event_date"`
-	Location    string    `json:"location"`
-	ImageID     string    `json:"image_id,omitempty"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	EventDate   string   `json:"event_date"`
+	Location    string   `json:"location"`
+	ImageURI    string   `json:"image_uri,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 }
 
 // UpdateEventRequest данные для обновления события (частичное обновление)
 type UpdateEventRequest struct {
-	Title       *string    `json:"title,omitempty"`
-	Description *string    `json:"description,omitempty"`
-	EventDate   *time.Time `json:"event_date,omitempty"`
-	Location    *string    `json:"location,omitempty"`
-	ImageID     *string    `json:"image_id,omitempty"`
+	Title       *string   `json:"title,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	EventDate   *string   `json:"event_date,omitempty"`
+	Location    *string   `json:"location,omitempty"`
+	ImageURI    *string   `json:"image_uri,omitempty"`
+	Tags        *[]string `json:"tags,omitempty"`
 }
 
 // =====================================================
@@ -57,35 +62,37 @@ type UpdateEventRequest struct {
 
 // Create создаёт новое событие
 func (s *EventService) Create(ctx context.Context, creatorID types.IdType, req *CreateEventRequest) (*models.Event, error) {
-	// 1. Нормализация
 	req.Title = strings.TrimSpace(req.Title)
 	req.Description = strings.TrimSpace(req.Description)
 	req.Location = strings.TrimSpace(req.Location)
-	req.ImageID = strings.TrimSpace(req.ImageID)
+	req.ImageURI = strings.TrimSpace(req.ImageURI)
+	req.Tags = normalizeTags(req.Tags)
 
-	// 2. Валидация
 	if err := validateCreateEvent(req); err != nil {
 		return nil, fmt.Errorf("%w: %w", domain_errors.ErrValidation, err)
 	}
 
-	// 3. Проверка существования создателя
 	if err := s.verifyCreatorExists(ctx, creatorID); err != nil {
 		return nil, err
 	}
 
-	// 4. Сборка доменной модели
+	eventDate, err := time.Parse("2006-01-02", req.EventDate)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid event_date format", domain_errors.ErrValidation)
+	}
+
 	event := &models.Event{
 		Title:       req.Title,
 		Description: req.Description,
-		EventDate:   req.EventDate.Truncate(24 * time.Hour), // сохраняем только дату
+		EventDate:   eventDate,
 		Location:    req.Location,
-		ImageID:     toNullString(req.ImageID),
+		ImageID:     toNullString(req.ImageURI),
 		CreatorID:   creatorID,
+		Tags:        req.Tags,
 	}
 
-	// 5. Сохранение в БД
 	if err := s.eventRepo.Create(ctx, event); err != nil {
-		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+		return nil, err
 	}
 
 	return event, nil
@@ -99,29 +106,28 @@ func (s *EventService) Create(ctx context.Context, creatorID types.IdType, req *
 func (s *EventService) GetByID(ctx context.Context, id types.IdType) (*models.Event, error) {
 	event, err := s.eventRepo.GetByID(ctx, id)
 	if err != nil {
-		if stderrors.Is(err, domain_errors.ErrNotFound) {
+		if strings.Contains(err.Error(), domain_errors.ErrNotFound.Error()) {
 			return nil, fmt.Errorf("%w: event %d", domain_errors.ErrEventNotFound, id)
 		}
-		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+		return nil, err
 	}
 	return event, nil
 }
 
 // List получает список всех событий с пагинацией
-func (s *EventService) List(ctx context.Context, limit, offset int) ([]*models.Event, error) {
-	events, err := s.eventRepo.List(ctx, limit, offset)
+func (s *EventService) List(ctx context.Context, limit, offset int, search string) ([]*models.Event, error) {
+	events, err := s.eventRepo.List(ctx, limit, offset, search)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+		return nil, err
 	}
 	return events, nil
 }
 
 // GetByCreatorID получает события конкретного пользователя
 func (s *EventService) GetByCreatorID(ctx context.Context, creatorID types.IdType, limit, offset int) ([]*models.Event, error) {
-	// Опционально: проверить, что пользователь существует
 	events, err := s.eventRepo.GetByCreatorID(ctx, creatorID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+		return nil, err
 	}
 	return events, nil
 }
@@ -132,35 +138,39 @@ func (s *EventService) GetByCreatorID(ctx context.Context, creatorID types.IdTyp
 
 // Update обновляет событие
 func (s *EventService) Update(ctx context.Context, id types.IdType, creatorID types.IdType, req *UpdateEventRequest) (*models.Event, error) {
-	// 1. Получаем существующее событие
 	existing, err := s.eventRepo.GetByID(ctx, id)
 	if err != nil {
-		if stderrors.Is(err, domain_errors.ErrNotFound) {
+		if strings.Contains(err.Error(), domain_errors.ErrNotFound.Error()) {
 			return nil, fmt.Errorf("%w: event %d", domain_errors.ErrEventNotFound, id)
 		}
-		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+		return nil, err
 	}
 
-	// 2. Проверка прав: обновлять может только создатель (или модератор/админ)
 	if existing.CreatorID != creatorID {
 		return nil, fmt.Errorf("%w: you can only edit your own events", domain_errors.ErrForbidden)
 	}
 
-	// 3. Валидация частичных обновлений
+	trimUpdateRequest(req)
+	parsedDate, err := parseOptionalDate(req.EventDate)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := validateUpdateEvent(req); err != nil {
 		return nil, fmt.Errorf("%w: %w", domain_errors.ErrValidation, err)
 	}
 
-	// 4. Применяем изменения
-	updated := *existing // копируем структуру
+	updated := *existing
 	applyUpdates(&updated, req)
-
-	// 5. Сохраняем
-	if err := s.eventRepo.Update(ctx, &updated); err != nil {
-		return nil, fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+	if parsedDate != nil {
+		updated.EventDate = *parsedDate
 	}
 
-	return &updated, nil
+	if err := s.eventRepo.Update(ctx, &updated); err != nil {
+		return nil, err
+	}
+
+	return s.eventRepo.GetByID(ctx, id)
 }
 
 // =====================================================
@@ -171,10 +181,10 @@ func (s *EventService) Update(ctx context.Context, id types.IdType, creatorID ty
 func (s *EventService) Delete(ctx context.Context, id types.IdType, creatorID types.IdType) error {
 	existing, err := s.eventRepo.GetByID(ctx, id)
 	if err != nil {
-		if stderrors.Is(err, domain_errors.ErrNotFound) {
+		if strings.Contains(err.Error(), domain_errors.ErrNotFound.Error()) {
 			return fmt.Errorf("%w: event %d", domain_errors.ErrEventNotFound, id)
 		}
-		return fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+		return err
 	}
 
 	// Проверка прав
@@ -182,10 +192,43 @@ func (s *EventService) Delete(ctx context.Context, id types.IdType, creatorID ty
 		return fmt.Errorf("%w: you can only delete your own events", domain_errors.ErrForbidden)
 	}
 
+	if s.fileStorage != nil && existing.ImageID.Valid && strings.TrimSpace(existing.ImageID.String) != "" {
+		if err := s.fileStorage.DeleteEventImage(ctx, existing.ImageID.String); err != nil {
+			return fmt.Errorf("file storage error: %w", err)
+		}
+	}
+
 	if err := s.eventRepo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("%w: %w", domain_errors.ErrDatabase, err)
+		return err
 	}
 	return nil
+}
+
+func (s *EventService) UploadImage(ctx context.Context, content io.Reader, size int64, contentType string) (string, error) {
+	if s.fileStorage == nil {
+		return "", fmt.Errorf("file storage is not initialized")
+	}
+
+	imageID, err := s.fileStorage.UploadEventImage(ctx, content, size, contentType)
+	if err != nil {
+		return "", fmt.Errorf("file storage error: %w", err)
+	}
+
+	return imageID, nil
+}
+
+func (s *EventService) Register(ctx context.Context, eventID, userID types.IdType) (*models.Event, error) {
+	if err := s.eventRepo.RegisterAttendee(ctx, eventID, userID); err != nil {
+		return nil, err
+	}
+	return s.eventRepo.GetByID(ctx, eventID)
+}
+
+func (s *EventService) Unregister(ctx context.Context, eventID, userID types.IdType) (*models.Event, error) {
+	if err := s.eventRepo.UnregisterAttendee(ctx, eventID, userID); err != nil {
+		return nil, err
+	}
+	return s.eventRepo.GetByID(ctx, eventID)
 }
 
 // =====================================================
@@ -193,38 +236,41 @@ func (s *EventService) Delete(ctx context.Context, id types.IdType, creatorID ty
 // =====================================================
 
 func validateCreateEvent(req *CreateEventRequest) error {
-	// Title
 	if req.Title == "" {
 		return domain_errors.ErrTitleRequired
 	}
 	if len(req.Title) > 255 {
 		return domain_errors.ErrTitleTooLong
 	}
-	// Description
 	if req.Description == "" {
 		return domain_errors.ErrDescriptionRequired
 	}
 	if len(req.Description) > 5000 {
 		return domain_errors.ErrDescriptionTooLong
 	}
-	// EventDate
-	if req.EventDate.IsZero() {
+	if strings.TrimSpace(req.EventDate) == "" {
 		return domain_errors.ErrDateRequired
 	}
-	// Дата не может быть в прошлом (разрешаем сегодня)
-	if req.EventDate.Truncate(24 * time.Hour).Before(time.Now().Truncate(24 * time.Hour)) {
+	parsedDate, err := time.Parse("2006-01-02", req.EventDate)
+	if err != nil {
+		return domain_errors.ErrDateRequired
+	}
+	if parsedDate.Truncate(24 * time.Hour).Before(time.Now().Truncate(24 * time.Hour)) {
 		return domain_errors.ErrDateInPast
 	}
-	// Location
 	if req.Location == "" {
 		return domain_errors.ErrLocationRequired
 	}
 	if len(req.Location) > 255 {
 		return domain_errors.ErrLocationTooLong
 	}
-	// ImageID (опционально)
-	if req.ImageID != "" && len(req.ImageID) > 128 {
+	if req.ImageURI != "" && len(req.ImageURI) > 512 {
 		return domain_errors.ErrImageIDInvalid
+	}
+	for _, tag := range req.Tags {
+		if len(strings.TrimSpace(tag)) > 64 {
+			return domain_errors.ErrTagTooLong
+		}
 	}
 	return nil
 }
@@ -249,10 +295,11 @@ func validateUpdateEvent(req *UpdateEventRequest) error {
 		}
 	}
 	if req.EventDate != nil {
-		if req.EventDate.IsZero() {
+		parsedDate, err := time.Parse("2006-01-02", strings.TrimSpace(*req.EventDate))
+		if err != nil {
 			return domain_errors.ErrDateRequired
 		}
-		if req.EventDate.Truncate(24 * time.Hour).Before(time.Now().Truncate(24 * time.Hour)) {
+		if parsedDate.Truncate(24 * time.Hour).Before(time.Now().Truncate(24 * time.Hour)) {
 			return domain_errors.ErrDateInPast
 		}
 	}
@@ -265,11 +312,20 @@ func validateUpdateEvent(req *UpdateEventRequest) error {
 			return domain_errors.ErrLocationTooLong
 		}
 	}
-	if req.ImageID != nil {
-		*req.ImageID = strings.TrimSpace(*req.ImageID)
-		if *req.ImageID != "" && len(*req.ImageID) > 128 {
+	if req.ImageURI != nil {
+		*req.ImageURI = strings.TrimSpace(*req.ImageURI)
+		if *req.ImageURI != "" && len(*req.ImageURI) > 512 {
 			return domain_errors.ErrImageIDInvalid
 		}
+	}
+	if req.Tags != nil {
+		cleaned := normalizeTags(*req.Tags)
+		for _, tag := range cleaned {
+			if len(tag) > 64 {
+				return domain_errors.ErrTagTooLong
+			}
+		}
+		*req.Tags = cleaned
 	}
 	return nil
 }
@@ -281,7 +337,6 @@ func validateUpdateEvent(req *UpdateEventRequest) error {
 func (s *EventService) verifyCreatorExists(ctx context.Context, creatorID types.IdType) error {
 	_, err := s.userProvider.GetByID(ctx, creatorID)
 	if err != nil {
-		// Если пользователя нет в БД
 		return fmt.Errorf("%w: creator %d does not exist", domain_errors.ErrCreatorNotFound, creatorID)
 	}
 	return nil
@@ -294,15 +349,69 @@ func applyUpdates(event *models.Event, req *UpdateEventRequest) {
 	if req.Description != nil {
 		event.Description = *req.Description
 	}
-	if req.EventDate != nil {
-		event.EventDate = req.EventDate.Truncate(24 * time.Hour)
-	}
 	if req.Location != nil {
 		event.Location = *req.Location
 	}
-	if req.ImageID != nil {
-		event.ImageID = toNullString(*req.ImageID)
+	if req.ImageURI != nil {
+		event.ImageID = toNullString(*req.ImageURI)
 	}
+	if req.Tags != nil {
+		event.Tags = append([]string(nil), (*req.Tags)...)
+	}
+}
+
+func parseOptionalDate(value *string) (*time.Time, error) {
+	if value == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(*value) == "" {
+		return nil, domain_errors.ErrDateRequired
+	}
+	parsedDate, err := time.Parse("2006-01-02", strings.TrimSpace(*value))
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid event_date format", domain_errors.ErrValidation)
+	}
+	return &parsedDate, nil
+}
+
+func trimUpdateRequest(req *UpdateEventRequest) {
+	if req.Title != nil {
+		trimmed := strings.TrimSpace(*req.Title)
+		req.Title = &trimmed
+	}
+	if req.Description != nil {
+		trimmed := strings.TrimSpace(*req.Description)
+		req.Description = &trimmed
+	}
+	if req.EventDate != nil {
+		trimmed := strings.TrimSpace(*req.EventDate)
+		req.EventDate = &trimmed
+	}
+	if req.Location != nil {
+		trimmed := strings.TrimSpace(*req.Location)
+		req.Location = &trimmed
+	}
+	if req.ImageURI != nil {
+		trimmed := strings.TrimSpace(*req.ImageURI)
+		req.ImageURI = &trimmed
+	}
+}
+
+func normalizeTags(tags []string) []string {
+	seen := make(map[string]struct{})
+	result := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		trimmed := strings.TrimSpace(tag)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		result = append(result, trimmed)
+	}
+	return result
 }
 
 func toNullString(s string) sql.NullString {

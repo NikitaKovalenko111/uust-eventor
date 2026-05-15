@@ -1,22 +1,27 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { AppHeader } from '../components/AppHeader';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { FormInput } from '../components/FormInput';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { theme } from '../constants/theme';
+import { RootStackParamList } from '../navigation/types';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { loginRequest, registerRequest } from '../redux/slices/authSlice';
 import { UserRole } from '../types/models';
 
-export const AuthPage = () => {
+type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
+
+export const AuthPage = ({ navigation }: Props) => {
   const dispatch = useAppDispatch();
   const auth = useAppSelector((state) => state.auth);
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('user@eventor.ru');
-  const [password, setPassword] = useState('123456');
+  const [city, setCity] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('user');
 
   const onSubmit = () => {
@@ -24,7 +29,7 @@ export const AuthPage = () => {
       dispatch(loginRequest({ email, password }));
       return;
     }
-    dispatch(registerRequest({ name, email, password, role }));
+    dispatch(registerRequest({ name, city, email, password, role }));
   };
 
   return (
@@ -46,7 +51,8 @@ export const AuthPage = () => {
           </View>
 
           {mode === 'register' ? <FormInput label="Имя" value={name} onChangeText={setName} placeholder="Ваше имя" /> : null}
-          <FormInput label="Почта" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+          {mode === 'register' ? <FormInput label="Город" value={city} onChangeText={setCity} placeholder="Ваш город" /> : null}
+          <FormInput label="Почта" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="email@example.com" />
           <FormInput label="Пароль" value={password} onChangeText={setPassword} secureTextEntry />
 
           {mode === 'register' ? (
@@ -69,10 +75,10 @@ export const AuthPage = () => {
             title={mode === 'login' ? 'Войти' : 'Создать аккаунт'}
             onPress={onSubmit}
             loading={auth.loading}
-            disabled={!email || !password || (mode === 'register' && !name)}
+            disabled={!email || !password || (mode === 'register' && (!name || !city))}
           />
 
-          <Text style={styles.hint}>Демо-вход: user@eventor.ru или moderator@eventor.ru</Text>
+          <PrimaryButton title="Смотреть мероприятия" type="outline" onPress={() => navigation.navigate('Events')} />
         </View>
       </AnimatedEntry>
     </ScreenContainer>
@@ -144,10 +150,5 @@ const styles = StyleSheet.create({
   error: {
     color: theme.colors.danger,
     fontSize: 13,
-  },
-  hint: {
-    color: theme.colors.muted,
-    fontSize: 12,
-    textAlign: 'center',
   },
 });

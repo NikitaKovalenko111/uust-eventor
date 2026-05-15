@@ -2,8 +2,13 @@
 package event_controller
 
 import (
+	"io"
 	"log/slog"
+	"mime"
+	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	stderrors "errors"
 
@@ -11,6 +16,7 @@ import (
 	event_service "eventor/internal/event/services/usecase/event"
 	event_dto "eventor/internal/event/transport/http/dto/event"
 	http_helpers "eventor/internal/platform/pkg/http/helpers" // ваш shared-хелпер валидации
+	file_storage "eventor/internal/platform/storage/files"
 	"eventor/internal/platform/types"
 
 	"github.com/go-playground/validator/v10"
@@ -22,28 +28,35 @@ type EventController struct {
 	logger       *slog.Logger
 	validator    *validator.Validate
 	eventService *event_service.EventService
+	fileStorage  *file_storage.FileStorage
 }
 
 // New создаёт контроллер
-func Init(logger *slog.Logger, eventService *event_service.EventService) *EventController {
+func Init(logger *slog.Logger, eventService *event_service.EventService, fileStorage *file_storage.FileStorage) *EventController {
 	return &EventController{
 		logger:       logger,
 		validator:    validator.New(),
 		eventService: eventService,
+		fileStorage:  fileStorage,
 	}
 }
 
 // RegisterRoutes регистрирует маршруты событий (все защищены authMiddleware)
 func (c *EventController) RegisterRoutes(app *fiber.App, rout string, authMiddleware *fiber.Handler) {
-	protectedRouter := app.Group(rout, *authMiddleware)
-	router := app.Group(rout)
+	publicRouter := app.Group(rout)
 
-	router.Get("/", c.ListEvents)
-	router.Get("/:id", c.GetEvent)
+	publicRouter.Get("", c.ListEvents)
+	publicRouter.Get("/", c.ListEvents)
+	publicRouter.Get("/:id", c.GetEvent)
+	publicRouter.Get("/images/:image_id/file", c.GetImageFile)
 
-	protectedRouter.Post("/", c.CreateEvent)
-	protectedRouter.Put("/:id", c.UpdateEvent)
-	protectedRouter.Delete("/:id", c.DeleteEvent)
+	app.Post(rout, *authMiddleware, c.CreateEvent)
+	app.Post(rout+"/", *authMiddleware, c.CreateEvent)
+	app.Post(rout+"/image", *authMiddleware, c.UploadImage)
+	app.Put(rout+"/:id", *authMiddleware, c.UpdateEvent)
+	app.Delete(rout+"/:id", *authMiddleware, c.DeleteEvent)
+	app.Post(rout+"/:id/register", *authMiddleware, c.RegisterEvent)
+	app.Delete(rout+"/:id/register", *authMiddleware, c.UnregisterEvent)
 }
 
 // =====================================================
@@ -95,6 +108,58 @@ func (c *EventController) CreateEvent(ctx *fiber.Ctx) error {
 	return ctx.Status(fiber.StatusCreated).JSON(event_dto.ToResponse(event))
 }
 
+// UploadImage godoc
+//
+//	@Summary		Upload event cover image
+//	@Description	Upload image for event cover and receive storage key
+//	@Tags			events
+//	@Accept			multipart/form-data
+//	@Produce		json
+//	@Param			image	formData	file	true	"Cover image"
+//	@Success		200	{object}	EventImageResponse
+//	@Failure		400	{object}	ErrorResponse
+//	@Failure		401	{object}	ErrorResponse
+//	@Security		BearerAuth
+//	@Router			/api/v1/events/image [post]
+func (c *EventController) UploadImage(ctx *fiber.Ctx) error {
+	if c.fileStorage == nil {
+		return ctx.Status(http.StatusInternalServerError).JSON(ErrorResponse{Error: "file storage is not initialized", Code: http.StatusInternalServerError})
+	}
+
+	fileHeader, err := ctx.FormFile("image")
+	if err != nil {
+		return ctx.Status(http.StatusBadRequest).JSON(ErrorResponse{Error: "image file is required", Code: http.StatusBadRequest})
+	}
+
+	contentType := fileHeader.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = mime.TypeByExtension(strings.ToLower(filepath.Ext(fileHeader.Filename)))
+	}
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	if !strings.HasPrefix(contentType, "image/") {
+		return ctx.Status(http.StatusBadRequest).JSON(ErrorResponse{Error: "image must be an image", Code: http.StatusBadRequest})
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.logger.Error("failed to open event image file", slog.Any("error", err))
+		return ctx.Status(http.StatusBadRequest).JSON(ErrorResponse{Error: "cannot read image file", Code: http.StatusBadRequest})
+	}
+	defer file.Close()
+
+	imageID, err := c.eventService.UploadImage(ctx.UserContext(), file, fileHeader.Size, contentType)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "upload event image")
+	}
+
+	return ctx.Status(http.StatusOK).JSON(EventImageResponse{
+		ImageID: imageID,
+		URL:     "/api/v1/events/images/" + imageID + "/file",
+	})
+}
+
 // =====================================================
 // READ
 // =====================================================
@@ -130,6 +195,40 @@ func (c *EventController) GetEvent(ctx *fiber.Ctx) error {
 	return ctx.Status(fiber.StatusOK).JSON(event_dto.ToResponse(event))
 }
 
+func (c *EventController) GetImageFile(ctx *fiber.Ctx) error {
+	if c.fileStorage == nil {
+		return ctx.Status(http.StatusInternalServerError).JSON(ErrorResponse{Error: "file storage is not initialized", Code: http.StatusInternalServerError})
+	}
+
+	imageID := strings.TrimSpace(ctx.Params("image_id"))
+	if imageID == "" {
+		return ctx.Status(http.StatusBadRequest).JSON(ErrorResponse{Error: "invalid image ID", Code: http.StatusBadRequest})
+	}
+
+	reader, contentType, err := c.fileStorage.OpenEventImage(ctx.UserContext(), imageID)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "get event image")
+	}
+	defer func() {
+		if closer, ok := reader.(io.Closer); ok {
+			_ = closer.Close()
+		}
+	}()
+
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	imageBytes, err := io.ReadAll(reader)
+	if err != nil {
+		c.logger.Error("failed to read event image file", slog.Any("error", err), slog.String("image_id", imageID))
+		return ctx.Status(http.StatusInternalServerError).JSON(ErrorResponse{Error: "cannot read event image file", Code: http.StatusInternalServerError})
+	}
+
+	ctx.Set(fiber.HeaderContentType, contentType)
+	return ctx.Send(imageBytes)
+}
+
 // ListEvents godoc
 //
 //	@Summary		List events
@@ -145,6 +244,7 @@ func (c *EventController) GetEvent(ctx *fiber.Ctx) error {
 func (c *EventController) ListEvents(ctx *fiber.Ctx) error {
 	limit := ctx.QueryInt("limit", 20)
 	offset := ctx.QueryInt("offset", 0)
+	search := strings.TrimSpace(ctx.Query("search"))
 
 	if limit < 1 || limit > 100 {
 		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
@@ -157,7 +257,7 @@ func (c *EventController) ListEvents(ctx *fiber.Ctx) error {
 		})
 	}
 
-	events, err := c.eventService.List(ctx.UserContext(), limit, offset)
+	events, err := c.eventService.List(ctx.UserContext(), limit, offset, search)
 	if err != nil {
 		return c.handleServiceError(ctx, err, "list events")
 	}
@@ -265,6 +365,44 @@ func (c *EventController) DeleteEvent(ctx *fiber.Ctx) error {
 	return ctx.SendStatus(fiber.StatusNoContent)
 }
 
+func (c *EventController) RegisterEvent(ctx *fiber.Ctx) error {
+	userID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok || userID == 0 {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: fiber.StatusUnauthorized})
+	}
+
+	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid event ID", Code: fiber.StatusBadRequest})
+	}
+
+	event, err := c.eventService.Register(ctx.UserContext(), types.IdType(idParam), userID)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "register event")
+	}
+
+	return ctx.Status(fiber.StatusOK).JSON(event_dto.ToResponse(event))
+}
+
+func (c *EventController) UnregisterEvent(ctx *fiber.Ctx) error {
+	userID, ok := ctx.Locals("user_id").(types.IdType)
+	if !ok || userID == 0 {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized", Code: fiber.StatusUnauthorized})
+	}
+
+	idParam, err := strconv.ParseUint(ctx.Params("id"), 10, 64)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "invalid event ID", Code: fiber.StatusBadRequest})
+	}
+
+	event, err := c.eventService.Unregister(ctx.UserContext(), types.IdType(idParam), userID)
+	if err != nil {
+		return c.handleServiceError(ctx, err, "unregister event")
+	}
+
+	return ctx.Status(fiber.StatusOK).JSON(event_dto.ToResponse(event))
+}
+
 // =====================================================
 // ERROR HANDLING & RESPONSES
 // =====================================================
@@ -288,6 +426,16 @@ func (c *EventController) handleServiceError(ctx *fiber.Ctx, err error, operatio
 		return ctx.Status(fiber.StatusForbidden).JSON(ErrorResponse{
 			Error: "you can only modify your own events",
 			Code:  fiber.StatusForbidden,
+		})
+	case stderrors.Is(err, domain_errors.ErrEventAlreadyRegistered):
+		return ctx.Status(fiber.StatusConflict).JSON(ErrorResponse{
+			Error: "event already registered",
+			Code:  fiber.StatusConflict,
+		})
+	case stderrors.Is(err, domain_errors.ErrEventNotRegistered):
+		return ctx.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+			Error: "event registration not found",
+			Code:  fiber.StatusNotFound,
 		})
 	case stderrors.Is(err, domain_errors.ErrForeignKeyViolation):
 		return ctx.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
@@ -315,4 +463,9 @@ type ListResponse struct {
 	Count  int                        `json:"count"`
 	Limit  int                        `json:"limit"`
 	Offset int                        `json:"offset"`
+}
+
+type EventImageResponse struct {
+	ImageID string `json:"image_id"`
+	URL     string `json:"url"`
 }

@@ -53,7 +53,7 @@ func main() {
 	authModule := auth_module.New(cfg, app, logger, storage, userServices.UserService, authMiddleware, tokenService)
 	authModule.Run()
 
-	eventModule := event_module.New(cfg, app, &authMiddleware, logger, storage.Db, userServices.UserService)
+	eventModule := event_module.New(cfg, app, &authMiddleware, logger, storage.Db, userServices.UserService, storage.FileStorage)
 	eventModule.Run()
 
 	app.Get("/health", func(c *fiber.Ctx) error {

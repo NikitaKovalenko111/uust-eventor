@@ -3,6 +3,7 @@ package event
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 
 	"eventor/internal/event/domain/models"
@@ -17,6 +18,8 @@ type EventResponse struct {
 	Location    string       `json:"location"`
 	ImageID     *string      `json:"image_id,omitempty"`
 	CreatorID   types.IdType `json:"creator_id"`
+	Tags        []string     `json:"tags"`
+	Attendees   []string     `json:"attendees"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
@@ -30,6 +33,8 @@ func ToResponse(e *models.Event) *EventResponse {
 		Location:    e.Location,
 		ImageID:     nullStringToPtr(e.ImageID),
 		CreatorID:   e.CreatorID,
+		Tags:        append([]string(nil), e.Tags...),
+		Attendees:   idSliceToStrings(e.Attendees),
 		CreatedAt:   e.CreatedAt,
 		UpdatedAt:   e.UpdatedAt,
 	}
@@ -40,4 +45,12 @@ func nullStringToPtr(ns sql.NullString) *string {
 		return nil
 	}
 	return &ns.String
+}
+
+func idSliceToStrings(ids []types.IdType) []string {
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		result = append(result, fmt.Sprintf("%d", id))
+	}
+	return result
 }

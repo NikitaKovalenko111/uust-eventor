@@ -2,7 +2,6 @@ package auth_service
 
 import (
 	"context"
-	"errors"
 	"eventor/internal/auth/contracts/user_provider"
 	domain_errors "eventor/internal/auth/domain/errors"
 	"eventor/internal/auth/domain/models"
@@ -29,7 +28,7 @@ func (s *AuthService) Register(city string, name string, email string, password 
 	existingUser, err := s.UserProvider.GetByEmail(context.Background(), email)
 
 	if err != nil {
-		if !errors.Is(err, user_errors.ErrUserNotFound) {
+		if !user_errors.IsNotFound(err) {
 			return nil, err
 		}
 	}
@@ -89,9 +88,14 @@ func (s *AuthService) Login(email string, password string) (*models.TokenPair, e
 	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback()
 
 	tokenPair, err := s.TokenService.CreateTokenPair(user.ID, user.Email, user.Role, tx)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 

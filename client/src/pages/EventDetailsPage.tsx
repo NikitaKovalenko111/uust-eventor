@@ -1,15 +1,20 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { AppHeader } from '../components/AppHeader';
+import { PrimaryButton } from '../components/PrimaryButton';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { theme } from '../constants/theme';
 import { RootStackParamList } from '../navigation/types';
-import { useAppSelector } from '../redux/hooks';
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { registerForEventRequest } from '../redux/slices/eventsSlice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EventDetails'>;
 
 export const EventDetailsPage = ({ route, navigation }: Props) => {
+  const dispatch = useAppDispatch();
   const eventItem = useAppSelector((state) => state.events.list.find((event) => event.id === route.params.eventId));
+  const userId = useAppSelector((state) => state.auth.user?.id ?? '');
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
 
   if (!eventItem) {
     return (
@@ -20,18 +25,46 @@ export const EventDetailsPage = ({ route, navigation }: Props) => {
     );
   }
 
+  const isRegistered = eventItem.attendees.includes(userId);
+  const isOwnEvent = isAuthenticated && eventItem.creatorId === userId;
+
   return (
     <ScreenContainer>
       <AppHeader title="Страница мероприятия" onActionPress={() => navigation.goBack()} actionIcon="arrow-back" />
 
-      <View style={styles.photoBlock}>
-        <Image source={{ uri: eventItem.imageUri }} style={styles.image} />
-      </View>
+      {eventItem.imageUri ? (
+        <View style={styles.photoBlock}>
+          <Image source={{ uri: eventItem.imageUri }} style={styles.image} resizeMode="cover" />
+        </View>
+      ) : null}
 
       <Text style={styles.title}>{eventItem.title}</Text>
+      <Text style={styles.shortDescription}>{eventItem.shortDescription}</Text>
       <Text style={styles.description}>{eventItem.description}</Text>
       <Text style={styles.meta}>Дата: {eventItem.date}</Text>
       <Text style={styles.meta}>Место: {eventItem.location}</Text>
+      <Text style={styles.meta}>Теги: {eventItem.tags.join(' • ')}</Text>
+      <Text style={styles.meta}>Участники: {eventItem.attendees.length}</Text>
+
+      {!isOwnEvent ? (
+        <PrimaryButton
+          title={
+            !isAuthenticated
+              ? 'Войти, чтобы записаться'
+              : isRegistered
+                ? 'Отменить регистрацию'
+                : 'Записаться на мероприятие'
+          }
+          type={!isAuthenticated || isRegistered ? 'outline' : 'primary'}
+          onPress={() => {
+            if (!isAuthenticated) {
+              navigation.navigate('Auth');
+              return;
+            }
+            dispatch(registerForEventRequest(eventItem.id));
+          }}
+        />
+      ) : null}
 
       <View style={styles.discussionBlock}>
         <Text style={styles.discussionTitle}>Блок обсуждения мероприятия</Text>
@@ -58,6 +91,11 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: 20,
     fontWeight: '700',
+  },
+  shortDescription: {
+    color: theme.colors.muted,
+    fontSize: 14,
+    fontWeight: '600',
   },
   description: {
     color: theme.colors.text,

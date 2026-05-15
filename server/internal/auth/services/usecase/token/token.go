@@ -152,6 +152,7 @@ func (s *TokenService) RefreshTokenPair(refreshTokenString string, userID types.
 		}
 
 		stx = tx
+		defer stx.Rollback()
 	} else {
 		stx = tx
 	}
@@ -169,5 +170,16 @@ func (s *TokenService) RefreshTokenPair(refreshTokenString string, userID types.
 		return nil, domain_errors.ErrInvalidToken
 	}
 
-	return s.CreateTokenPair(userID, email, role, stx)
+	tokenPair, err := s.CreateTokenPair(userID, email, role, stx)
+	if err != nil {
+		return nil, err
+	}
+
+	if tx == nil {
+		if err := stx.Commit(); err != nil {
+			return nil, err
+		}
+	}
+
+	return tokenPair, nil
 }

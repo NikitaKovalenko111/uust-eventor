@@ -5,6 +5,8 @@ import (
 	"eventor/internal/event/transport/http/controllers"
 	"log/slog"
 
+	file_storage "eventor/internal/platform/storage/files"
+
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -14,10 +16,10 @@ type HTTP struct {
 	authMiddleware *fiber.Handler
 }
 
-func Init(services *services.Services, logger *slog.Logger, app *fiber.App, authMiddleware *fiber.Handler) *HTTP {
+func Init(services *services.Services, logger *slog.Logger, app *fiber.App, authMiddleware *fiber.Handler, fileStorage *file_storage.FileStorage) *HTTP {
 	return &HTTP{
 		app:            app,
-		controllers:    controllers.Init(services, logger),
+		controllers:    controllers.Init(services, fileStorage, logger),
 		authMiddleware: authMiddleware,
 	}
 }

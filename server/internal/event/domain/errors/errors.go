@@ -21,14 +21,17 @@ var (
 	ErrLocationRequired    = stderrors.New("location is required")
 	ErrLocationTooLong     = stderrors.New("location must not exceed 255 characters")
 	ErrImageIDInvalid      = stderrors.New("invalid image_id format or too long")
+	ErrTagTooLong          = stderrors.New("tag must not exceed 64 characters")
 
 	// Business logic errors
-	ErrNotFound            = stderrors.New("not found")
-	ErrEventNotFound       = stderrors.New("event not found")
-	ErrCreatorNotFound     = stderrors.New("creator (user) not found")
-	ErrUnauthorized        = stderrors.New("unauthorized")
-	ErrForbidden           = stderrors.New("forbidden")
-	ErrForeignKeyViolation = stderrors.New("foreign key violation (creator_id does not exist)")
+	ErrNotFound               = stderrors.New("not found")
+	ErrEventNotFound          = stderrors.New("event not found")
+	ErrEventAlreadyRegistered = stderrors.New("event already registered")
+	ErrEventNotRegistered     = stderrors.New("event not registered")
+	ErrCreatorNotFound        = stderrors.New("creator (user) not found")
+	ErrUnauthorized           = stderrors.New("unauthorized")
+	ErrForbidden              = stderrors.New("forbidden")
+	ErrForeignKeyViolation    = stderrors.New("foreign key violation (creator_id does not exist)")
 
 	// Infrastructure errors
 	ErrDatabase = stderrors.New("database error")

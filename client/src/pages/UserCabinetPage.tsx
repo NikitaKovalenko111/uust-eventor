@@ -24,6 +24,7 @@ export const UserCabinetPage = ({ navigation }: Props) => {
   const events = useAppSelector((state) => state.events.list);
 
   const [name, setName] = useState('');
+  const [city, setCity] = useState('');
   const [about, setAbout] = useState('');
   const [faculty, setFaculty] = useState('');
   const [course, setCourse] = useState('');
@@ -33,6 +34,7 @@ export const UserCabinetPage = ({ navigation }: Props) => {
       return;
     }
     setName(profile.name);
+    setCity(profile.city);
     setAbout(profile.about);
     setFaculty(profile.faculty);
     setCourse(profile.course);
@@ -77,13 +79,14 @@ export const UserCabinetPage = ({ navigation }: Props) => {
           <PrimaryButton title="Обновить аватар" type="outline" onPress={pickAvatar} />
 
           <FormInput label="Имя" value={name} onChangeText={setName} />
+          <FormInput label="Город" value={city} onChangeText={setCity} />
           <FormInput label="О себе" value={about} onChangeText={setAbout} />
           <FormInput label="Факультет" value={faculty} onChangeText={setFaculty} />
           <FormInput label="Курс" value={course} onChangeText={setCourse} keyboardType="number-pad" />
 
           <PrimaryButton
             title="Обновить профиль"
-            onPress={() => dispatch(updateProfileRequest({ name, about, faculty, course }))}
+            onPress={() => dispatch(updateProfileRequest({ name, city, about, faculty, course }))}
           />
         </View>
       </AnimatedEntry>

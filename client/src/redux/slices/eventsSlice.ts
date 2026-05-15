@@ -6,7 +6,6 @@ type EventsState = {
   loading: boolean;
   error: string | null;
   searchText: string;
-  searchDate: string;
 };
 
 const initialState: EventsState = {
@@ -14,7 +13,6 @@ const initialState: EventsState = {
   loading: false,
   error: null,
   searchText: '',
-  searchDate: '',
 };
 
 const eventsSlice = createSlice({
@@ -22,6 +20,8 @@ const eventsSlice = createSlice({
   initialState,
   reducers: {
     fetchEventsRequest(state) {
+      console.log("state");
+      
       state.loading = true;
       state.error = null;
     },
@@ -30,6 +30,10 @@ const eventsSlice = createSlice({
       state.list = action.payload;
     },
     fetchEventsFailure(state, action: PayloadAction<string>) {
+      state.loading = false;
+      state.error = action.payload;
+    },
+    eventsFailure(state, action: PayloadAction<string>) {
       state.loading = false;
       state.error = action.payload;
     },
@@ -48,12 +52,8 @@ const eventsSlice = createSlice({
     setSearchText(state, action: PayloadAction<string>) {
       state.searchText = action.payload;
     },
-    setSearchDate(state, action: PayloadAction<string>) {
-      state.searchDate = action.payload;
-    },
     clearFilters(state) {
       state.searchText = '';
-      state.searchDate = '';
     },
   },
 });
@@ -62,11 +62,11 @@ export const {
   fetchEventsRequest,
   fetchEventsSuccess,
   fetchEventsFailure,
+  eventsFailure,
   registerForEventRequest,
   createEventRequest,
   updateEvents,
   setSearchText,
-  setSearchDate,
   clearFilters,
 } = eventsSlice.actions;
 

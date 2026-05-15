@@ -8,7 +8,6 @@ import (
 	"io"
 	"regexp"
 	"strings"
-	"time"
 	"unicode"
 
 	file_storage "eventor/internal/platform/storage/files"
@@ -288,7 +287,27 @@ func (s *UserService) GetAvatarURL(ctx context.Context, id types.IdType) (string
 		return "", erors.ErrAvatarNotFound
 	}
 
-	return s.fileStorage.GetUserAvatarURL(ctx, id, 15*time.Minute)
+	return fmt.Sprintf("/api/v1/users/%d/avatar/file", id), nil
+}
+
+func (s *UserService) OpenAvatar(ctx context.Context, id types.IdType) (io.ReadCloser, string, error) {
+	if s.fileStorage == nil {
+		return nil, "", fmt.Errorf("%w: file storage is not initialized", erors.ErrFileStorage)
+	}
+
+	user, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, erors.ErrNotFound) {
+			return nil, "", fmt.Errorf("%w: user %d", erors.ErrUserNotFound, id)
+		}
+		return nil, "", erors.WrapDB(err)
+	}
+
+	if !user.AvatarImageID.Valid || strings.TrimSpace(user.AvatarImageID.String) == "" {
+		return nil, "", erors.ErrAvatarNotFound
+	}
+
+	return s.fileStorage.OpenUserAvatar(ctx, id)
 }
 
 // TODO: Delete AUTH

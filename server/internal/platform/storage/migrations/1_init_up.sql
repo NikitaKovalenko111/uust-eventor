@@ -45,10 +45,11 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE TABLE IF NOT EXISTS events (
   id SERIAL PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
+  short_description TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL,
   event_date DATE NOT NULL,
   location VARCHAR(255) NOT NULL,
-  image_id VARCHAR(128),
+  image_id VARCHAR(512),
   creator_id INTEGER NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

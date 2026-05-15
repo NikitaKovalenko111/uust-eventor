@@ -11,6 +11,10 @@ import (
 
 func NewJWTMiddleware(tokenService token_provider.TokenProvider, logger *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if isPublicEventReadRequest(c) {
+			return c.Next()
+		}
+
 		authHeader := c.Get("Authorization")
 		if authHeader == "" {
 			logger.Warn("missing authorization header")
@@ -34,7 +38,33 @@ func NewJWTMiddleware(tokenService token_provider.TokenProvider, logger *slog.Lo
 		c.Locals("user_id", claims.UserID)
 		c.Locals("email", claims.Email)
 		c.Locals("role", claims.Role)
+		c.Locals("user_role", claims.Role)
 
 		return c.Next()
 	}
+}
+
+func isPublicEventReadRequest(c *fiber.Ctx) bool {
+	if c.Method() != fiber.MethodGet && c.Method() != fiber.MethodHead {
+		return false
+	}
+
+	path := c.Path()
+	if path == "/api/v1/events" || path == "/api/v1/events/" {
+		return true
+	}
+
+	if strings.HasPrefix(path, "/api/v1/events/images/") && strings.HasSuffix(path, "/file") {
+		return true
+	}
+
+	if strings.HasPrefix(path, "/api/v1/events/") {
+		suffix := strings.TrimPrefix(path, "/api/v1/events/")
+		if suffix == "" || strings.Contains(suffix, "/") {
+			return false
+		}
+		return true
+	}
+
+	return false
 }
