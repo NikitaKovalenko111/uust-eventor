@@ -289,6 +289,12 @@ definitions:
           Whether event is marked as finished
           @example false
         type: boolean
+      friends_count:
+        description: |-
+          Number of user's friends attending this event
+          @example 3
+          @Minimum(0)
+        type: integer
       id:
         description: |-
           Unique event identifier
@@ -304,6 +310,11 @@ definitions:
           Event location
           @example "Moscow, Tverskaya 15"
         type: string
+      relevance_score:
+        description: |-
+          Relevance score for personalized recommendations
+          @example 85
+        type: integer
       tags:
         description: |-
           Event tags
@@ -403,6 +414,21 @@ definitions:
         - user
         - moderator
         type: string
+    type: object
+  eventor_internal_user_transport_http_dto_user.UserListResponse:
+    properties:
+      has_more:
+        type: boolean
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse'
+        type: array
     type: object
   eventor_internal_user_transport_http_dto_user.UserResponse:
     description: Public user profile information
@@ -1212,6 +1238,29 @@ paths:
       summary: Get avatar as raw file
       tags:
       - users
+  /api/v1/users/{id}/friends:
+    post:
+      description: Send friend request / create friendship (mutual)
+      parameters:
+      - description: User ID to add as friend
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "404":
+          description: Not Found
+      security:
+      - BearerAuth: []
+      summary: Add friend
+      tags:
+      - users
   /api/v1/users/me:
     get:
       description: Returns profile of the authenticated user
@@ -1342,6 +1391,31 @@ paths:
       security:
       - BearerAuth: []
       summary: Update my avatar
+      tags:
+      - users
+  /api/v1/users/search:
+    get:
+      description: Returns users whose email matches the query substring
+      parameters:
+      - description: Email search query
+        in: query
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/eventor_internal_user_transport_http_dto_user.UserListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_user_transport_http_controllers_user.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Search users by email
       tags:
       - users
   /health:

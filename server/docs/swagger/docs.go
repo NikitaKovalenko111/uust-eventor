@@ -904,6 +904,46 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/users/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns users whose email matches the query substring",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Search users by email",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Email search query",
+                        "name": "email",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users/{id}": {
             "get": {
                 "security": [
@@ -1207,6 +1247,43 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
                         }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/{id}/friends": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Send friend request / create friendship (mutual)",
+                "tags": [
+                    "users"
+                ],
+                "summary": "Add friend",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID to add as friend",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Not Found"
                     }
                 }
             }
@@ -1741,6 +1818,10 @@ const docTemplate = `{
                     "description": "Whether event is marked as finished\n@example false",
                     "type": "boolean"
                 },
+                "friends_count": {
+                    "description": "Number of user's friends attending this event\n@example 3\n@Minimum(0)",
+                    "type": "integer"
+                },
                 "id": {
                     "description": "Unique event identifier\n@example 12345",
                     "type": "integer"
@@ -1752,6 +1833,10 @@ const docTemplate = `{
                 "location": {
                     "description": "Event location\n@example \"Moscow, Tverskaya 15\"",
                     "type": "string"
+                },
+                "relevance_score": {
+                    "description": "Relevance score for personalized recommendations\n@example 85",
+                    "type": "integer"
                 },
                 "tags": {
                     "description": "Event tags\n@example [\"technology\",\"conference\"]]",
@@ -1834,6 +1919,29 @@ const docTemplate = `{
                         "user",
                         "moderator"
                     ]
+                }
+            }
+        },
+        "eventor_internal_user_transport_http_dto_user.UserListResponse": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse"
+                    }
                 }
             }
         },
