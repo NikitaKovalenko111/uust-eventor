@@ -1,0 +1,170 @@
+import * as ImagePicker from 'expo-image-picker';
+import { useEffect, useState } from 'react';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { AnimatedEntry } from '../components/AnimatedEntry';
+import { AppHeader } from '../components/AppHeader';
+import { EventCard } from '../components/EventCard';
+import { FormInput } from '../components/FormInput';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { ProfileAvatar } from '../components/ProfileAvatar';
+import { ScreenContainer } from '../components/ScreenContainer';
+import { theme } from '../constants/theme';
+import { RootStackParamList } from '../navigation/types';
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { logout } from '../redux/slices/authSlice';
+import { updateAvatarRequest, updateProfileRequest } from '../redux/slices/profileSlice';
+import { registerModeratorApi } from '../api/api';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'ModeratorCabinet'>;
+
+export const ModeratorCabinetPage = ({ navigation }: Props) => {
+  const dispatch = useAppDispatch();
+  const profile = useAppSelector((state) => state.profile.profile);
+  const events = useAppSelector((state) => state.events.list);
+
+  const [name, setName] = useState('');
+  const [city, setCity] = useState('');
+  const [about, setAbout] = useState('');
+  const [faculty, setFaculty] = useState('');
+  const [course, setCourse] = useState('');
+  const [newModName, setNewModName] = useState('');
+  const [newModEmail, setNewModEmail] = useState('');
+  const [newModPassword, setNewModPassword] = useState('');
+  const [creatingModerator, setCreatingModerator] = useState(false);
+  const [showModeratorForm, setShowModeratorForm] = useState(false);
+
+  useEffect(() => {
+    if (!profile) {
+      return;
+    }
+    setName(profile.name);
+    setCity(profile.city);
+    setAbout(profile.about);
+    setFaculty(profile.faculty);
+    setCourse(profile.course);
+  }, [profile]);
+
+  if (!profile) {
+    return null;
+  }
+
+  const myEvents = events;
+
+  const pickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Нет доступа', 'Разрешите доступ к фото для выбора аватара');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]?.uri) {
+      return;
+    }
+    dispatch(updateAvatarRequest(result.assets[0].uri));
+  };
+
+  return (
+    <ScreenContainer>
+      <AppHeader title="Личный кабинет" subtitle="Модератор" onActionPress={() => dispatch(logout())} actionIcon="log-out-outline" />
+
+      <AnimatedEntry>
+        <View style={styles.card}>
+          <View style={styles.centered}>
+            <ProfileAvatar uri={profile.avatarUri} />
+          </View>
+          <PrimaryButton title="Обновить аватар" type="outline" onPress={pickAvatar} />
+          <FormInput label="Имя" value={name} onChangeText={setName} />
+          <FormInput label="Город" value={city} onChangeText={setCity} />
+          <FormInput label="О себе" value={about} onChangeText={setAbout} />
+          <FormInput label="Факультет" value={faculty} onChangeText={setFaculty} />
+          <FormInput label="Курс" value={course} onChangeText={setCourse} keyboardType="number-pad" />
+          <PrimaryButton
+            title="Обновить профиль"
+            onPress={() => dispatch(updateProfileRequest({ name, city, about, faculty, course }))}
+          />
+          <View style={{ height: 1, backgroundColor: theme.colors.border, marginVertical: theme.spacing.sm }} />
+
+          {!showModeratorForm ? (
+            <PrimaryButton title="Добавить модератора" type="outline" onPress={() => setShowModeratorForm(true)} />
+          ) : (
+            <>
+              <Text style={{ fontWeight: '700', marginBottom: 6 }}>Создать модератора</Text>
+              <FormInput label="Имя модератора" value={newModName} onChangeText={setNewModName} />
+              <FormInput label="Почта модератора" value={newModEmail} onChangeText={setNewModEmail} autoCapitalize="none" keyboardType="email-address" />
+              <FormInput label="Пароль (необязательно)" value={newModPassword} onChangeText={setNewModPassword} secureTextEntry />
+              <PrimaryButton
+                title="Создать модератора"
+                onPress={async () => {
+                  if (!newModName || !newModEmail) {
+                    Alert.alert('Ошибка', 'Введите имя и почту модератора');
+                    return;
+                  }
+                  setCreatingModerator(true);
+                  try {
+                    const resp = await registerModeratorApi({ name: newModName, city: city || profile.city, email: newModEmail, password: newModPassword || undefined });
+                    Alert.alert('Успех', `Модератор создан${resp.password ? `, пароль: ${resp.password}` : ''}`);
+                    setNewModName('');
+                    setNewModEmail('');
+                    setNewModPassword('');
+                    setShowModeratorForm(false);
+                  } catch (err: any) {
+                    Alert.alert('Ошибка', err?.message ?? 'Не удалось создать модератора');
+                  } finally {
+                    setCreatingModerator(false);
+                  }
+                }}
+                loading={creatingModerator}
+              />
+              <PrimaryButton title="Отмена" type="outline" onPress={() => setShowModeratorForm(false)} />
+            </>
+          )}
+        </View>
+      </AnimatedEntry>
+
+      <PrimaryButton title="Открыть страницу мероприятий" type="outline" onPress={() => navigation.navigate('Events')} />
+      <PrimaryButton title="Поиск пользователей по email" type="outline" onPress={() => navigation.navigate('UserSearch')} />
+      <PrimaryButton title="Входящие запросы в друзья" type="outline" onPress={() => navigation.navigate('FriendRequests')} />
+
+      <Text style={styles.sectionTitle}>Все мероприятия</Text>
+      {myEvents.length === 0 ? <Text style={styles.empty}>Пока нет мероприятий</Text> : null}
+      {myEvents.map((eventItem) => (
+        <EventCard
+          key={eventItem.id}
+          eventItem={eventItem}
+          isRegistered
+          onPress={() => navigation.navigate('EventDetails', { eventId: eventItem.id })}
+        />
+      ))}
+    </ScreenContainer>
+  );
+};
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  centered: {
+    alignItems: 'center',
+    marginBottom: theme.spacing.xs,
+  },
+  sectionTitle: {
+    color: theme.colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  empty: {
+    color: theme.colors.muted,
+    fontSize: 13,
+  },
+});

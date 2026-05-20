@@ -1,0 +1,69 @@
+export type UserRole = 'user' | 'moderator';
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  city: string;
+  about: string;
+  faculty: string;
+  course: string;
+  avatarUri: string;
+};
+
+export type EventItem = {
+  id: string;
+  title: string;
+  shortDescription: string;
+  description: string;
+  date: string;
+  location: string;
+  tags: string[];
+  imageUri: string;
+  attendees: string[];
+  creatorId: string;
+  finished?: boolean;
+  relevanceScore?: number;
+  friendsCount?: number;
+};
+
+export type Attendee = {
+  id: string;
+  userId: string;
+  name: string;
+  avatarId?: string;
+  joinedAt: string;
+};
+
+export type EventComment = {
+  id: string;
+  eventId: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+};
+
+export type AuthPayload = {
+  email: string;
+  password: string;
+};
+
+export type RegisterPayload = AuthPayload & {
+  name: string;
+  city: string;
+};
+
+export type CreateEventPayload = {
+  title: string;
+  description: string;
+  date: string;
+  location: string;
+  tags: string[];
+  imageUri: string;
+};
+
+export type CreateCommentPayload = {
+  text: string;
+};

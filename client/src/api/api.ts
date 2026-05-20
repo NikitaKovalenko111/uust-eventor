@@ -1,0 +1,607 @@
+import axios, { AxiosError } from 'axios';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+import { AuthPayload, CreateCommentPayload, CreateEventPayload, EventComment, EventItem, RegisterPayload, User, Attendee } from '../types/models';
+
+type AuthResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_at: string;
+};
+
+type ServerUserResponse = {
+  id: number;
+  name: string;
+  email: string;
+  role: 'user' | 'moderator';
+  about?: string | null;
+  city: string;
+  faculty?: string | null;
+  course?: string | null;
+  avatar_image_id?: string | null;
+};
+
+type ServerAvatarResponse = {
+  data_url?: string;
+  url?: string;
+};
+
+type ServerEventResponse = {
+  id: number;
+  title: string;
+  description: string;
+  event_date: string;
+  location: string;
+  image_id?: string | null;
+  creator_id: number;
+  attendees: number[];
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  finished?: boolean;
+  relevance_score?: number;
+};
+
+type ServerCommentResponse = {
+  id: number;
+  event_id: number;
+  author_id: number;
+  author_name: string;
+  text: string;
+  created_at: string;
+};
+
+type ServerCommentsResponse = {
+  comments: ServerCommentResponse[];
+  count: number;
+};
+
+type ServerEventImageResponse = {
+  image_id: string;
+  url: string;
+};
+
+type ServerEventsResponse = {
+  events: ServerEventResponse[];
+  count: number;
+  limit: number;
+  offset: number;
+};
+
+type ServerUsersResponse = {
+  users: ServerUserResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+};
+
+type ServerAttendeeResponse = {
+  id: number;
+  user_id: number;
+  name: string;
+  avatar_image_id?: string | null;
+  joined_at: string;
+};
+
+type ServerAttendeesResponse = {
+  attendees: ServerAttendeeResponse[];
+  count: number;
+};
+
+type ServerIncomingFriendRequest = {
+  request_id: number;
+  user: {
+    id: number;
+    name: string;
+    avatar_image_id?: string | null;
+  };
+};
+
+const extractHost = (rawValue?: string | null) => {
+  const value = rawValue?.trim();
+  if (!value) {
+    return '';
+  }
+
+  const withoutProtocol = value.replace(/^(exp|exps|http|https):\/\//, '');
+  const [hostPart] = withoutProtocol.split('/');
+  const [host] = hostPart.split(':');
+  return host?.trim() ?? '';
+};
+
+const resolveApiBaseUrl = () => {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (envUrl) {
+    return envUrl.replace(/\/$/, '');
+  }
+
+  const hostCandidates = [
+    Constants.expoConfig?.hostUri,
+    (Constants as { manifest?: { debuggerHost?: string } }).manifest?.debuggerHost,
+    (Constants as { expoGoConfig?: { debuggerHost?: string } }).expoGoConfig?.debuggerHost,
+    (Constants as { manifest2?: { extra?: { expoClient?: { hostUri?: string } } } }).manifest2?.extra?.expoClient?.hostUri,
+  ];
+
+  for (const candidate of hostCandidates) {
+    const host = extractHost(candidate);
+    if (host) {
+      return `http://${host}:8080`;
+    }
+  }
+
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8080';
+  }
+
+  return 'http://localhost:8080';
+};
+
+const apiBaseUrl = resolveApiBaseUrl();
+console.log('[api] resolved base url', apiBaseUrl);
+
+const apiClient = axios.create({
+  baseURL: apiBaseUrl,
+  timeout: 10000,
+});
+
+let accessToken: string | null = null;
+
+export const setApiAccessToken = (token: string | null) => {
+  accessToken = token;
+};
+
+apiClient.interceptors.request.use((config) => {
+  if (accessToken) {
+    config.headers.Authorization = `Bearer ${accessToken}`;
+  }
+  console.log('[api] request', {
+    method: config.method,
+    url: `${config.baseURL ?? ''}${config.url ?? ''}`,
+  });
+  return config;
+});
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error)) {
+      console.log('[api] response error', {
+        code: error.code,
+        message: error.message,
+        status: error.response?.status ?? null,
+        url: `${error.config?.baseURL ?? ''}${error.config?.url ?? ''}`,
+      });
+    }
+    return Promise.reject(error);
+  }
+);
+
+const toApiError = (error: unknown, fallbackMessage: string) => {
+  if (axios.isAxiosError(error)) {
+    const axiosError = error as AxiosError<{ error?: string; message?: string }>;
+    const responseError = axiosError.response?.data?.error ?? axiosError.response?.data?.message;
+    return new Error(responseError || axiosError.message || fallbackMessage);
+  }
+  if (error instanceof Error) {
+    return new Error(error.message);
+  }
+  return new Error(fallbackMessage);
+};
+
+const serverUserToClient = (user: ServerUserResponse, avatarUri = ''): User => ({
+  id: String(user.id),
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  city: user.city,
+  about: user.about ?? '',
+  faculty: user.faculty ?? '',
+  course: user.course ?? '',
+  avatarUri,
+});
+
+const serverEventToClient = (eventItem: ServerEventResponse): EventItem => ({
+  id: String(eventItem.id),
+  title: eventItem.title,
+  description: eventItem.description,
+  date: eventItem.event_date.slice(0, 10),
+  location: eventItem.location,
+  tags: eventItem.tags ?? [],
+  imageUri: buildEventImageUri(eventItem),
+  attendees: (eventItem.attendees ?? []).map(String),
+  creatorId: String(eventItem.creator_id),
+  shortDescription: buildShortDescription(eventItem.description),
+  finished: Boolean(eventItem.finished),
+  relevanceScore: eventItem.relevance_score ?? 0,
+  friendsCount: (eventItem as any).friends_count ?? 0,
+});
+
+const serverCommentToClient = (commentItem: ServerCommentResponse): EventComment => ({
+  id: String(commentItem.id),
+  eventId: String(commentItem.event_id),
+  authorId: String(commentItem.author_id),
+  authorName: commentItem.author_name,
+  text: commentItem.text,
+  createdAt: commentItem.created_at,
+});
+
+const buildShortDescription = (description: string) => {
+  const text = description.trim();
+  if (!text) {
+    return '';
+  }
+
+  const maxLength = 140;
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, maxLength).trimEnd()}...`;
+};
+
+const buildEventImageUri = (eventItem: ServerEventResponse) => {
+  const imageId = eventItem.image_id?.trim();
+  if (!imageId) {
+    return '';
+  }
+  if (imageId.startsWith('http://') || imageId.startsWith('https://') || imageId.startsWith('data:')) {
+    return imageId;
+  }
+  return new URL(`/api/v1/events/images/${imageId}/file`, apiBaseUrl).toString();
+};
+
+const buildUserAvatarUri = (userId: string) => new URL(`/api/v1/users/${userId}/avatar/file`, apiBaseUrl).toString();
+
+const buildEventPayload = (payload: CreateEventPayload) => ({
+  title: payload.title,
+  description: payload.description,
+  event_date: payload.date,
+  location: payload.location,
+  tags: payload.tags,
+  image_uri: payload.imageUri,
+});
+
+export const loginApi = async (payload: AuthPayload): Promise<AuthResponse> => {
+  try {
+    const response = await apiClient.post<AuthResponse>('/api/v1/auth/login', payload);
+    return response.data;
+  } catch (error) {
+    throw toApiError(error, 'Ошибка входа');
+  }
+};
+
+export const registerApi = async (payload: RegisterPayload): Promise<AuthResponse> => {
+  try {
+    const response = await apiClient.post<AuthResponse>('/api/v1/auth/register', payload);
+    return response.data;
+  } catch (error) {
+    throw toApiError(error, 'Ошибка регистрации');
+  }
+};
+
+export const registerModeratorApi = async (payload: { name: string; city: string; email: string; password?: string }): Promise<any> => {
+  try {
+    const response = await apiClient.post<any>('/api/v1/auth/register/moderator', payload);
+    return response.data;
+  } catch (error) {
+    throw toApiError(error, 'Ошибка создания модератора');
+  }
+};
+
+export const fetchEventCommentsApi = async (eventId: string): Promise<EventComment[]> => {
+  try {
+    const response = await apiClient.get<ServerCommentsResponse>(`/api/v1/events/${eventId}/comments`);
+    return (response.data.comments ?? []).map(serverCommentToClient);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить комментарии');
+  }
+};
+
+export const fetchEventAttendeesApi = async (eventId: string): Promise<Attendee[]> => {
+  try {
+    const response = await apiClient.get<ServerAttendeesResponse>(`/api/v1/events/${eventId}/attendees`);
+    return (response.data.attendees ?? []).map((a) => ({
+      id: String(a.id),
+      userId: String(a.user_id),
+      name: a.name,
+      avatarId: a.avatar_image_id ?? '',
+      joinedAt: a.joined_at,
+    }));
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить список участников');
+  }
+};
+
+export const addFriendApi = async (userId: string): Promise<void> => {
+  try {
+    await apiClient.post(`/api/v1/users/${userId}/friend-requests`, {});
+  } catch (error) {
+    throw toApiError(error, 'Не удалось добавить в друзья');
+  }
+};
+
+export const sendFriendRequestApi = async (userId: string, message = ''): Promise<number> => {
+  try {
+    const response = await apiClient.post<{ request_id: number }>(`/api/v1/users/${userId}/friend-requests`, { message });
+    return response.data.request_id;
+  } catch (error) {
+    throw toApiError(error, 'Не удалось отправить запрос в друзья');
+  }
+};
+
+export const fetchIncomingFriendRequestsApi = async (): Promise<ServerIncomingFriendRequest[]> => {
+  try {
+    const response = await apiClient.get<{ requests: ServerIncomingFriendRequest[] }>('/api/v1/users/me/friend-requests');
+    return response.data.requests ?? [];
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить входящие запросы');
+  }
+};
+
+export const acceptFriendRequestApi = async (requestId: number): Promise<void> => {
+  try {
+    await apiClient.post(`/api/v1/users/friend-requests/${requestId}/accept`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось принять запрос');
+  }
+};
+
+export const rejectFriendRequestApi = async (requestId: number): Promise<void> => {
+  try {
+    await apiClient.post(`/api/v1/users/friend-requests/${requestId}/reject`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось отклонить запрос');
+  }
+};
+
+export const fetchUserApi = async (userId: string): Promise<ServerUserResponse> => {
+  try {
+    const response = await apiClient.get<ServerUserResponse>(`/api/v1/users/${userId}`);
+    return response.data;
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить профиль пользователя');
+  }
+};
+
+export const searchUsersByEmailApi = async (email: string): Promise<User[]> => {
+  try {
+    const response = await apiClient.get<ServerUsersResponse>('/api/v1/users/search/by-email', {
+      params: { email },
+    });
+
+    const users = response.data.users ?? [];
+    return Promise.all(
+      users.map(async (user) => {
+        let avatarUri = '';
+        try {
+          avatarUri = await fetchUserAvatarApi(String(user.id));
+        } catch {
+          avatarUri = '';
+        }
+        return serverUserToClient(user, avatarUri);
+      })
+    );
+  } catch (error) {
+    throw toApiError(error, 'Не удалось выполнить поиск пользователей');
+  }
+};
+
+export const createEventCommentApi = async (eventId: string, payload: CreateCommentPayload): Promise<EventComment> => {
+  try {
+    const response = await apiClient.post<ServerCommentResponse>(`/api/v1/events/${eventId}/comments`, payload);
+    return serverCommentToClient(response.data);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось отправить комментарий');
+  }
+};
+
+export const fetchCurrentUserApi = async (): Promise<ServerUserResponse> => {
+  try {
+    const response = await apiClient.get<ServerUserResponse>('/api/v1/users/me');
+    return response.data;
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить профиль');
+  }
+};
+
+export const fetchUserAvatarApi = async (userId: string): Promise<string> => {
+  try {
+    const response = await apiClient.get<ServerAvatarResponse>(`/api/v1/users/${userId}/avatar`);
+    console.log('[avatar] fetch response', {
+      userId,
+      status: response.status,
+      hasDataUrl: Boolean(response.data.data_url),
+      dataUrlLength: response.data.data_url?.length ?? 0,
+      hasUrl: Boolean(response.data.url),
+      url: response.data.url ?? '',
+    });
+
+    const dataUrl = response.data.data_url?.trim();
+    if (dataUrl) {
+      console.log('[avatar] using data_url', {
+        userId,
+        prefix: dataUrl.slice(0, 32),
+        length: dataUrl.length,
+      });
+      return dataUrl;
+    }
+
+    const publicFileUrl = new URL(`/api/v1/users/${userId}/avatar/file`, apiBaseUrl).toString();
+    console.log('[avatar] using public file fallback', {
+      userId,
+      prefix: publicFileUrl.slice(0, 64),
+      length: publicFileUrl.length,
+    });
+    return publicFileUrl;
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить аватар');
+  }
+};
+
+export const updateProfileApi = async (payload: Partial<User>): Promise<User> => {
+  try {
+    const response = await apiClient.put<ServerUserResponse>('/api/v1/users/me', {
+      name: payload.name,
+      about: payload.about,
+      city: payload.city,
+      faculty: payload.faculty,
+      course: payload.course,
+    });
+    let avatarUri = '';
+    try {
+      avatarUri = await fetchUserAvatarApi(String(response.data.id));
+    } catch {
+      avatarUri = '';
+    }
+    return serverUserToClient(response.data, avatarUri);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось обновить профиль');
+  }
+};
+
+export const updateAvatarApi = async (uri: string): Promise<User> => {
+  try {
+    console.log('[avatar] upload start', {
+      uriPrefix: uri.slice(0, 64),
+      uriLength: uri.length,
+    });
+    const fileName = uri.split('/').pop() || 'avatar.jpg';
+    const match = /\.([a-zA-Z0-9]+)$/.exec(fileName);
+    const type = match ? `image/${match[1].toLowerCase()}` : 'image/jpeg';
+    const formData = new FormData();
+    formData.append('avatar', {
+      uri,
+      name: fileName,
+      type,
+    } as never);
+
+    const response = await fetch(`${resolveApiBaseUrl()}/api/v1/users/me/avatar`, {
+      method: 'PUT',
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorBody = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+      console.log('[avatar] upload failed', {
+        status: response.status,
+        error: errorBody.error ?? errorBody.message ?? '',
+      });
+      throw new Error(errorBody.error || errorBody.message || 'Не удалось обновить аватар');
+    }
+
+    const responseData = (await response.json()) as ServerUserResponse;
+    console.log('[avatar] upload response user', {
+      id: responseData.id,
+      avatar_image_id: responseData.avatar_image_id ?? null,
+    });
+    let avatarUri = '';
+    try {
+      avatarUri = await fetchUserAvatarApi(String(responseData.id));
+    } catch {
+      avatarUri = '';
+    }
+    console.log('[avatar] upload resolved uri', {
+      id: responseData.id,
+      hasAvatarUri: Boolean(avatarUri),
+      prefix: avatarUri.slice(0, 64),
+      length: avatarUri.length,
+    });
+    return serverUserToClient(responseData, avatarUri);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось обновить аватар');
+  }
+};
+
+export const buildCommentAvatarUri = (userId: string) => buildUserAvatarUri(userId);
+
+export const deleteAvatarApi = async (): Promise<User> => {
+  try {
+    const response = await apiClient.delete<ServerUserResponse>('/api/v1/users/me/avatar');
+    return serverUserToClient(response.data, '');
+  } catch (error) {
+    throw toApiError(error, 'Не удалось удалить аватар');
+  }
+};
+
+export const fetchEventsApi = async (search = '', limit = 20, offset = 0, city = ''): Promise<EventItem[]> => {
+  try {
+    const params: any = { limit, offset };
+    if (search.trim()) params.search = search.trim();
+    if (city.trim()) params.city = city.trim();
+    const response = await apiClient.get<ServerEventsResponse>('/api/v1/events', { params });
+    return response.data.events.map(serverEventToClient);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить мероприятия');
+  }
+};
+
+export const registerToEventApi = async (eventId: string): Promise<void> => {
+  try {
+    await apiClient.post(`/api/v1/events/${eventId}/register`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось записаться на мероприятие');
+  }
+};
+
+export const unregisterFromEventApi = async (eventId: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/api/v1/events/${eventId}/register`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось отменить регистрацию');
+  }
+};
+
+export const createEventApi = async (payload: CreateEventPayload): Promise<void> => {
+  try {
+    await apiClient.post('/api/v1/events', buildEventPayload(payload));
+  } catch (error) {
+    throw toApiError(error, 'Не удалось создать мероприятие');
+  }
+};
+
+export const deleteEventApi = async (eventId: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/api/v1/events/${eventId}`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось удалить мероприятие');
+  }
+};
+
+export const finishEventApi = async (eventId: string): Promise<void> => {
+  try {
+    await apiClient.post(`/api/v1/events/${eventId}/finish`);
+  } catch (error) {
+    throw toApiError(error, 'Не удалось завершить мероприятие');
+  }
+};
+
+export const uploadEventImageApi = async (uri: string): Promise<ServerEventImageResponse> => {
+  try {
+    const fileName = uri.split('/').pop() || 'event-image.jpg';
+    const match = /\.([a-zA-Z0-9]+)$/.exec(fileName);
+    const type = match ? `image/${match[1].toLowerCase()}` : 'image/jpeg';
+    const formData = new FormData();
+    formData.append('image', {
+      uri,
+      name: fileName,
+      type,
+    } as never);
+
+    const response = await fetch(`${apiBaseUrl}/api/v1/events/image`, {
+      method: 'POST',
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorBody = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+      throw new Error(errorBody.error || errorBody.message || 'Не удалось загрузить обложку мероприятия');
+    }
+
+    return (await response.json()) as ServerEventImageResponse;
+  } catch (error) {
+    throw toApiError(error, 'Не удалось загрузить обложку мероприятия');
+  }
+};

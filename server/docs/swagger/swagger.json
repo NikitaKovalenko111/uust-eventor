@@ -1,0 +1,2122 @@
+{
+    "schemes": [
+        "http",
+        "https"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "Platform for event management: authentication, user profiles, events with comments and registration",
+        "title": "Eventor API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "https://eventor.local/support",
+            "email": "support@eventor.local"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {
+        "/api/v1/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get paginated list of events with optional search filter",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "List events",
+                "parameters": [
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page (1-100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search by title or description",
+                        "name": "search",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of events",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create an event by authenticated user. Only creator can modify/delete this event later.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Create new event",
+                "parameters": [
+                    {
+                        "description": "Event creation data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_services_usecase_event.CreateEventRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Event created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized: invalid or missing token",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: insufficient permissions",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/image": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload image file for event cover. Returns storage key and URL. Accepts multipart/form-data.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Upload event cover image",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Image file (JPEG, PNG, WebP)",
+                        "name": "image",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Image uploaded successfully",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.EventImageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid file or not an image",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "File storage error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/images/{image_id}/file": {
+            "get": {
+                "description": "Download event cover image by image ID. Returns raw image bytes.",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Get event image file",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Image ID",
+                        "name": "image_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Image file",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid image ID",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Image not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Storage error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns full event details by numeric ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Get event by ID",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Event found",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid ID format",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update event fields. Only the creator can modify their event.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Update event",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update (all optional)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_services_usecase_event.UpdateEventRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Event updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: not the event creator",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently delete an event. Only the creator can delete their event.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Delete event",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Event deleted successfully (no content)"
+                    },
+                    "400": {
+                        "description": "Invalid event ID",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: not the event creator",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/{id}/comments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all comments for a specific event",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "List event comments",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of comments",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.CommentListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid event ID",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Add a new comment to the event by authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Add comment to event",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Comment text",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.CreateCommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Comment created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.CommentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/{id}/finish": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mark event as finished. Only the creator can finish their event.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Finish event",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Event marked as finished",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid event ID",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: not the event creator",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/{id}/register": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Register authenticated user for participation in the event",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Register for event",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully registered",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid event ID",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Event not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Already registered for this event",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Remove authenticated user's registration from the event",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Unregister from event",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully unregistered",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid event ID",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Event or registration not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_event_transport_http_controllers_event.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns profile of the authenticated user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get my profile",
+                "responses": {
+                    "200": {
+                        "description": "Profile retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized: invalid or missing token",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update authenticated user's profile. Email and role cannot be changed via this endpoint.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Update my profile",
+                "parameters": [
+                    {
+                        "description": "Profile fields to update (all optional)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UpdateUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Profile updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: email/role change not allowed via this endpoint",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict: email already exists",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/me/avatar": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload new avatar image for authenticated user. Accepts multipart/form-data.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Update my avatar",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Avatar image file (JPEG, PNG, WebP)",
+                        "name": "avatar",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Avatar updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid file or not an image",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "File storage error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Remove avatar from authenticated user's profile",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Delete my avatar",
+                "responses": {
+                    "200": {
+                        "description": "Avatar deleted successfully",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Avatar not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns users whose email matches the query substring",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Search users by email",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Email search query",
+                        "name": "email",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns public profile information of specified user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get user by ID",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User profile retrieved",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid user ID format",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update any user's profile. Requires moderator role. All fields optional.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users-admin"
+                ],
+                "summary": "Update user profile (admin)",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update (all optional)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UpdateUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Profile updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: moderators only",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict: email already exists",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently delete user account. Requires moderator role.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users-admin"
+                ],
+                "summary": "Delete user (admin)",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "User deleted successfully (no content)"
+                    },
+                    "400": {
+                        "description": "Invalid user ID",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: moderators only",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/{id}/avatar": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns avatar of specified user as base64 data URL. Requires authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get avatar as data URL",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Avatar data URL",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.AvatarResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid user ID",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User or avatar not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/{id}/avatar/file": {
+            "get": {
+                "description": "Download avatar image file directly. Public endpoint (no auth required).",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get avatar as raw file",
+                "parameters": [
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Avatar image file",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid user ID",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User or avatar not found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "File read error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_user_transport_http_controllers_user.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/{id}/friends": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Send friend request / create friendship (mutual)",
+                "tags": [
+                    "users"
+                ],
+                "summary": "Add friend",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID to add as friend",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Returns service health status. Public endpoint.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check endpoint",
+                "responses": {
+                    "200": {
+                        "description": "Service is healthy",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.HealthCheckResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/login": {
+            "post": {
+                "description": "Validates email/password credentials and returns JWT access/refresh token pair on success.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Authenticate user and receive tokens",
+                "parameters": [
+                    {
+                        "description": "Login credentials",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Authentication successful",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid email or password",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/refresh": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Uses a valid refresh token to obtain a new access/refresh token pair. Requires valid authentication context from middleware.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Refresh authentication tokens",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.RefreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "New token pair issued",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid, expired or unauthorized refresh token",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/register": {
+            "post": {
+                "description": "Creates a new regular user account. Role is forced to \"user\" regardless of input. Returns JWT token pair on success.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Register new user account",
+                "parameters": [
+                    {
+                        "description": "Registration data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Tokens issued successfully",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already registered",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/register/moderator": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Allows authenticated moderator to create a new moderator account. If password is omitted, a random one is generated and returned in response.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Register new moderator account",
+                "parameters": [
+                    {
+                        "description": "Moderator registration data (password optional)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Tokens + optional generated password",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ModeratorRegisterResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or missing required fields (name, email)",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized: invalid or missing auth token",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: caller is not a moderator",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already registered",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/eventor_internal_auth_transport_http_dto_auth.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "eventor_internal_auth_transport_http_dto_auth.AuthResponse": {
+            "description": "Response containing authentication tokens",
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "JWT access token for authorized requests\n@example \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM...\"",
+                    "type": "string"
+                },
+                "expires_at": {
+                    "description": "Token expiration time in RFC3339 format\n@example \"2024-12-31T23:59:59Z\"",
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "description": "JWT refresh token for obtaining new access tokens\n@example \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyZWZyZXNo...\"",
+                    "type": "string"
+                }
+            }
+        },
+        "eventor_internal_auth_transport_http_dto_auth.ErrorResponse": {
+            "description": "Standard error response structure",
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "Human-readable error message\n@example \"invalid credentials\"",
+                    "type": "string"
+                }
+            }
+        },
+        "eventor_internal_auth_transport_http_dto_auth.LoginRequest": {
+            "description": "Request body for user authentication",
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "description": "User's email address (must be valid email format)\n@example \"user@example.com\"\n@MinLength(1)",
+                    "type": "string"
+                },
+                "password": {
+                    "description": "User's password (minimum 6 characters)\n@example \"SecurePass123\"\n@MinLength(6)",
+                    "type": "string",
+                    "minLength": 6
+                }
+            }
+        },
+        "eventor_internal_auth_transport_http_dto_auth.ModeratorRegisterResponse": {
+            "description": "Response for moderator registration (includes generated password if applicable)",
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "JWT access token for the new moderator\n@example \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"",
+                    "type": "string"
+                },
+                "expires_at": {
+                    "description": "Token expiration time in RFC3339 format\n@example \"2024-12-31T23:59:59Z\"",
+                    "type": "string"
+                },
+                "password": {
+                    "description": "Generated password (only present if not provided in request)\n@example \"aB3xK9mP2nQ7\"",
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "description": "JWT refresh token for the new moderator\n@example \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"",
+                    "type": "string"
+                }
+            }
+        },
+        "eventor_internal_auth_transport_http_dto_auth.RefreshTokenRequest": {
+            "description": "Request body for refreshing authentication tokens",
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "description": "Refresh token obtained from previous login/registration\n@example \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM...\"}",
+                    "type": "string"
+                }
+            }
+        },
+        "eventor_internal_auth_transport_http_dto_auth.RegisterRequest": {
+            "description": "Request body for user/moderator registration",
+            "type": "object",
+            "required": [
+                "email",
+                "name",
+                "password"
+            ],
+            "properties": {
+                "city": {
+                    "description": "User's city of residence (optional)\n@example \"Moscow\"",
+                    "type": "string"
+                },
+                "email": {
+                    "description": "User's email address (must be valid and unique)\n@example \"user@example.com\"",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "User's full name (minimum 3 characters)\n@example \"Ivan Ivanov\"\n@MinLength(3)",
+                    "type": "string",
+                    "minLength": 3
+                },
+                "password": {
+                    "description": "User's password (minimum 6 characters)\n@example \"SecurePass123\"\n@MinLength(6)",
+                    "type": "string",
+                    "minLength": 6
+                },
+                "role": {
+                    "description": "User role: \"user\" (default) or \"moderator\" (protected endpoint)\n@enum user moderator\n@default \"user\"\n@example \"user\"",
+                    "type": "string",
+                    "enum": [
+                        "user",
+                        "moderator"
+                    ]
+                }
+            }
+        },
+        "eventor_internal_event_services_usecase_event.CreateEventRequest": {
+            "description": "Request body for creating a new event",
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "Event description\n@example \"Annual conference about latest tech trends\"",
+                    "type": "string"
+                },
+                "event_date": {
+                    "description": "Event date and time in RFC3339 format\n@example \"2024-12-15T10:00:00Z\"",
+                    "type": "string"
+                },
+                "image_uri": {
+                    "description": "Optional image ID from UploadImage endpoint\n@example \"img_abc123xyz\"",
+                    "type": "string"
+                },
+                "location": {
+                    "description": "Event location (city, address)\n@example \"Moscow, Tverskaya 15\"",
+                    "type": "string"
+                },
+                "tags": {
+                    "description": "Event tags for categorization\n@example [\"technology\",\"conference\",\"networking\"]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "description": "Event title\n@example \"Tech Conference 2024\"",
+                    "type": "string"
+                }
+            }
+        },
+        "eventor_internal_event_services_usecase_event.UpdateEventRequest": {
+            "description": "Request body for updating an existing event (all fields optional)",
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "New event description\n@example \"Updated description with new agenda\"",
+                    "type": "string"
+                },
+                "event_date": {
+                    "description": "New event date and time in RFC3339 format\n@example \"2024-12-20T14:00:00Z\"",
+                    "type": "string"
+                },
+                "image_uri": {
+                    "description": "New image ID (use null to remove image)\n@example \"img_new789\"",
+                    "type": "string"
+                },
+                "location": {
+                    "description": "New event location\n@example \"Saint Petersburg, Nevsky 28\"",
+                    "type": "string"
+                },
+                "tags": {
+                    "description": "New event tags (replaces existing)\n@example [\"ai\",\"ml\",\"workshop\"]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "description": "New event title\n@example \"Updated Tech Conference 2024\"",
+                    "type": "string"
+                }
+            }
+        },
+        "eventor_internal_event_transport_http_dto_event.CommentListResponse": {
+            "description": "Paginated list of comments",
+            "type": "object",
+            "properties": {
+                "comments": {
+                    "description": "List of comments",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.CommentResponse"
+                    }
+                },
+                "count": {
+                    "description": "Total number of comments\n@example 42",
+                    "type": "integer"
+                }
+            }
+        },
+        "eventor_internal_event_transport_http_dto_event.CommentResponse": {
+            "description": "Comment information",
+            "type": "object",
+            "properties": {
+                "author_id": {
+                    "description": "Author user ID\n@example 67890",
+                    "type": "integer"
+                },
+                "author_name": {
+                    "description": "Author display name\n@example \"Ivan Ivanov\"",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "Creation timestamp in RFC3339 format\n@example \"2024-01-16T10:15:00Z\"",
+                    "type": "string"
+                },
+                "event_id": {
+                    "description": "Associated event ID\n@example 12345",
+                    "type": "integer"
+                },
+                "id": {
+                    "description": "Unique comment identifier\n@example 999",
+                    "type": "integer"
+                },
+                "text": {
+                    "description": "Comment text\n@example \"Great event!\"",
+                    "type": "string"
+                }
+            }
+        },
+        "eventor_internal_event_transport_http_dto_event.CreateCommentRequest": {
+            "type": "object",
+            "required": [
+                "text"
+            ],
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "maxLength": 2000
+                }
+            }
+        },
+        "eventor_internal_event_transport_http_dto_event.EventResponse": {
+            "description": "Full event information returned by the API",
+            "type": "object",
+            "properties": {
+                "attendees": {
+                    "description": "List of registered attendee user IDs (as strings)\n@example [\"67890\",\"67891\"]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "created_at": {
+                    "description": "Creation timestamp in RFC3339 format\n@example \"2024-01-15T08:30:00Z\"",
+                    "type": "string"
+                },
+                "creator_id": {
+                    "description": "Creator user ID\n@example 67890",
+                    "type": "integer"
+                },
+                "description": {
+                    "description": "Event description\n@example \"Annual conference about latest tech trends\"",
+                    "type": "string"
+                },
+                "event_date": {
+                    "description": "Event date and time in RFC3339 format\n@example \"2024-12-15T10:00:00Z\"",
+                    "type": "string"
+                },
+                "finished": {
+                    "description": "Whether event is marked as finished\n@example false",
+                    "type": "boolean"
+                },
+                "friends_count": {
+                    "description": "Number of user's friends attending this event\n@example 3\n@Minimum(0)",
+                    "type": "integer"
+                },
+                "id": {
+                    "description": "Unique event identifier\n@example 12345",
+                    "type": "integer"
+                },
+                "image_id": {
+                    "description": "Image ID if cover image is set\n@example \"img_abc123xyz\"",
+                    "type": "string"
+                },
+                "location": {
+                    "description": "Event location\n@example \"Moscow, Tverskaya 15\"",
+                    "type": "string"
+                },
+                "relevance_score": {
+                    "description": "Relevance score for personalized recommendations\n@example 85",
+                    "type": "integer"
+                },
+                "tags": {
+                    "description": "Event tags\n@example [\"technology\",\"conference\"]]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "description": "Event title\n@example \"Tech Conference 2024\"",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "Last update timestamp in RFC3339 format\n@example \"2024-01-20T14:22:00Z\"",
+                    "type": "string"
+                }
+            }
+        },
+        "eventor_internal_user_transport_http_dto_user.HealthCheckResponse": {
+            "description": "Health check response",
+            "type": "object",
+            "properties": {
+                "status": {
+                    "description": "HTTP status code indicating service health\n@example 200",
+                    "type": "integer"
+                }
+            }
+        },
+        "eventor_internal_user_transport_http_dto_user.UpdateUserRequest": {
+            "description": "Request body for updating user profile. All fields are optional; null means \"do not change\".",
+            "type": "object",
+            "properties": {
+                "about": {
+                    "description": "Short bio or about me section (max 1000 characters)\n@example \"Software engineer passionate about Go and distributed systems\"\n@MaxLength(1000)",
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "avatar_image_id": {
+                    "description": "Reference to uploaded avatar image ID (optional)\n@example \"img_abc123\"\n@MaxLength(128)",
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "city": {
+                    "description": "User's city of residence (2-128 characters)\n@example \"Moscow\"\n@MinLength(2) @MaxLength(128)",
+                    "type": "string",
+                    "maxLength": 128,
+                    "minLength": 2
+                },
+                "course": {
+                    "description": "Course or year of study (optional)\n@example \"4\"\n@MaxLength(10)",
+                    "type": "string",
+                    "maxLength": 10
+                },
+                "email": {
+                    "description": "User's email address (must be valid and unique)\n@example \"user@example.com\"\n@Format email",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "faculty": {
+                    "description": "University faculty or department (optional)\n@example \"Faculty of Computer Science\"\n@MaxLength(255)",
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "name": {
+                    "description": "User's display name (2-255 characters)\n@example \"Ivan Ivanov\"\n@MinLength(2) @MaxLength(255)",
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 2
+                },
+                "password": {
+                    "description": "New password (8-128 characters, only for admin flows)\n@example \"NewSecurePass123!\"\n@MinLength(8) @MaxLength(128)",
+                    "type": "string",
+                    "maxLength": 128,
+                    "minLength": 8
+                },
+                "role": {
+                    "description": "User role: \"user\" or \"moderator\" (admin-only field)\n@enum user moderator\n@example \"user\"",
+                    "type": "string",
+                    "enum": [
+                        "user",
+                        "moderator"
+                    ]
+                }
+            }
+        },
+        "eventor_internal_user_transport_http_dto_user.UserListResponse": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/eventor_internal_user_transport_http_dto_user.UserResponse"
+                    }
+                }
+            }
+        },
+        "eventor_internal_user_transport_http_dto_user.UserResponse": {
+            "description": "Public user profile information",
+            "type": "object",
+            "properties": {
+                "about": {
+                    "description": "Short bio or about me section\n@example \"Software engineer passionate about Go\"",
+                    "type": "string"
+                },
+                "avatar_image_id": {
+                    "description": "Reference to avatar image ID if set\n@example \"img_abc123\"",
+                    "type": "string"
+                },
+                "city": {
+                    "description": "User's city of residence\n@example \"Moscow\"",
+                    "type": "string"
+                },
+                "course": {
+                    "description": "Course or year of study\n@example \"4\"",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "Account creation timestamp in RFC3339 format\n@example \"2024-01-15T08:30:00Z\"",
+                    "type": "string"
+                },
+                "email": {
+                    "description": "User's email address\n@example \"user@example.com\"",
+                    "type": "string"
+                },
+                "faculty": {
+                    "description": "University faculty or department\n@example \"Faculty of Computer Science\"",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "Unique user identifier\n@example 12345",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "User's display name\n@example \"Ivan Ivanov\"",
+                    "type": "string"
+                },
+                "role": {
+                    "description": "User role: \"user\" or \"moderator\"\n@example \"user\"",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "Last profile update timestamp in RFC3339 format\n@example \"2024-02-20T14:22:00Z\"",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_event_transport_http_controllers_event.ErrorResponse": {
+            "description": "Standard error response format",
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "HTTP status code\n@example 404",
+                    "type": "integer"
+                },
+                "details": {
+                    "description": "Detailed validation errors (if applicable)\n@example {\"title\": \"min length is 3\"}",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "error": {
+                    "description": "Human-readable error message\n@example \"event not found\"",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_event_transport_http_controllers_event.EventImageResponse": {
+            "description": "Response after successful image upload",
+            "type": "object",
+            "properties": {
+                "image_id": {
+                    "description": "Unique image identifier in storage\n@example \"img_abc123xyz\"",
+                    "type": "string"
+                },
+                "url": {
+                    "description": "URL to retrieve the image file\n@example \"/api/v1/events/images/img_abc123xyz/file\"",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_event_transport_http_controllers_event.ListResponse": {
+            "description": "Paginated list of events",
+            "type": "object",
+            "properties": {
+                "count": {
+                    "description": "Number of events in current page\n@example 20",
+                    "type": "integer"
+                },
+                "events": {
+                    "description": "List of events",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/eventor_internal_event_transport_http_dto_event.EventResponse"
+                    }
+                },
+                "limit": {
+                    "description": "Requested page size\n@example 20",
+                    "type": "integer"
+                },
+                "offset": {
+                    "description": "Requested offset\n@example 0",
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_user_transport_http_controllers_user.AvatarResponse": {
+            "description": "Response containing avatar data (for GetAvatar endpoint)",
+            "type": "object",
+            "properties": {
+                "data_url": {
+                    "description": "Avatar as data URL (base64-encoded, for inline display)\n@example \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...\"",
+                    "type": "string"
+                },
+                "url": {
+                    "description": "Direct URL to fetch avatar file\n@example \"/api/v1/users/12345/avatar/file\"",
+                    "type": "string"
+                }
+            }
+        },
+        "internal_user_transport_http_controllers_user.ErrorResponse": {
+            "description": "Standard error response format",
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "HTTP status code\n@example 404",
+                    "type": "integer"
+                },
+                "details": {
+                    "description": "Detailed validation errors (if applicable)\n@example {\"email\": \"must be valid email\", \"name\": \"is required\"}",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "error": {
+                    "description": "Human-readable error message\n@example \"user not found\"",
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Enter JWT token in format: `Bearer \u003cyour_token_here\u003e`. Token obtained from /auth/login or /auth/register.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    },
+    "tags": [
+        {
+            "description": "Authentication and authorization: login, registration, token refresh",
+            "name": "auth"
+        },
+        {
+            "description": "User profile management: get/update own profile, avatar operations",
+            "name": "users"
+        },
+        {
+            "description": "Administrative user operations: update/delete any user (moderator only)",
+            "name": "users-admin"
+        },
+        {
+            "description": "Event management: CRUD, comments, registration, images",
+            "name": "events"
+        },
+        {
+            "description": "Service health checks",
+            "name": "health"
+        }
+    ]
+}
